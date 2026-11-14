@@ -1,0 +1,14 @@
+# Override para servidor detras de Caddy/Cloudflare: sin puertos publicados;
+# turi-web se une a la red del Caddy existente.
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+services:
+  turi-web:
+    ports: !reset []
+    networks:
+      - default
+      - proxy
+
+networks:
+  proxy:
+    external: true
+    name: ecd-vps_default
