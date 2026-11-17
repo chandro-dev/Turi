@@ -50,7 +50,8 @@ def preview(db: Session, service_code: str, age: int, pregnant: bool, disability
     service = get_service(db, service_code)
     cls, reasons = _classify(age, pregnant, disability)
     options, model = suggest_client.suggest_points(db, service, cls)
-    return {"priority_class": cls, "priority_reasons": reasons, "options": options, "model": model}
+    return {"priority_class": cls, "priority_reasons": reasons, "options": options, "model": model,
+            "policy": suggest_client.policy()}
 
 
 def _classify(age: int, pregnant: bool, disability: bool):
@@ -88,6 +89,7 @@ def create_turn(db: Session, data: dict, username: str) -> tuple[Turn, str]:
         age=data["age"], pregnant=data["pregnant"], disability=data["disability"],
         priority_class=cls, priority_reasons=",".join(reasons), status=WAITING,
         initial_wait_est=chosen["est_wait_min"] if chosen else None, created_by=username,
+        bonus_min=chosen["bonus_min"] if chosen and cls == PREFERENCIAL else None,  # prioridad decidida por el modelo
     )
     db.add(t)
     db.flush()
@@ -142,6 +144,7 @@ def reassign_turn(db: Session, turn_id: int, point_id: int, username: str) -> Tu
     if t.status == NO_SHOW:  # reincorporacion: vuelve a la fila con prioridad baja
         t.status = WAITING
         t.priority_class = BAJA
+        t.bonus_min = None
         t.queued_at = queueing.now()
         queueing.add_event(db, t, "REQUEUED", f"Reincorporado en prioridad baja: {detail}", username)
     else:
@@ -241,5 +244,6 @@ def finish(db: Session, user: User, turn_id: int) -> Turn:
     minutes = (t.finished_at - t.started_at).total_seconds() / 60
     queueing.add_event(db, t, "FINISHED", f"{minutes:.1f} min", user.username)
     db.commit()
-    suggest_client.learn(t.service.code, t.point_id, t.priority_class == PREFERENCIAL, minutes)  # alimenta la IA
+    suggest_client.learn(t.service.code, t.point_id, t.priority_class == PREFERENCIAL, minutes,
+                         suggest_client.priors(db).get(t.service.code))  # alimenta la IA
     return t

@@ -8,7 +8,7 @@ import { BRAND } from './components.js';
 const NAV = {
   RECEPCION: [['#/recepcion', 'Recepcion', 'clipboard'], ['#/consulta', 'Consulta paciente', 'search'], ['#/pantalla', 'Pantalla de turnos', 'monitor']],
   MEDICO: [['#/medico', 'Mi consultorio', 'steth'], ['#/pantalla', 'Pantalla de turnos', 'monitor']],
-  SUPERVISOR: [['#/supervisor', 'Indicadores', 'chart'], ['#/fila', 'Fila general', 'list'], ['#/consulta', 'Consulta paciente', 'search'], ['#/pantalla', 'Pantalla de turnos', 'monitor']],
+  SUPERVISOR: [['#/supervisor', 'Indicadores', 'chart'], ['#/fila', 'Fila general', 'list'], ['#/modelo', 'Prueba del modelo', 'cpu'], ['#/consulta', 'Consulta paciente', 'search'], ['#/pantalla', 'Pantalla de turnos', 'monitor']],
 };
 
 export function shellView(user, content, active) {

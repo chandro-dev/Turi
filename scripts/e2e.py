@@ -93,5 +93,30 @@ check("display solo expone codigos (sin nombres)", "patient_name" not in json.du
 with_q = [p for p in d["points"] if p["waiting"] > 0]
 check("hay puntos con proximos turnos", bool(with_q) and all(len(p["upcoming"]) >= 1 for p in with_q))
 
+# --- Atencion prioritaria guiada por el modelo
+for i in range(4):
+    call("POST", "/turns", {"doc_number": f"N{i}{stamp}", "patient_name": f"Normal {i}", "age": 30, "service_code": "FAR"}, rec)
+s, prev_n = call("POST", "/turns/suggest", {"service_code": "FAR", "age": 30}, rec)
+s, prev_p = call("POST", "/turns/suggest", {"service_code": "FAR", "age": 72}, rec)
+on, op = prev_n["options"][0], prev_p["options"][0]
+check("preview informa politica de prioridad", "policy" in prev_p and prev_p["policy"]["target_wait_min"] > 0)
+check("prioritario recibe adelanto del modelo", op["bonus_min"] >= prev_p["policy"]["base_bonus_min"] and on["bonus_min"] == 0, str((op, on)))
+check("prioritario espera menos que un normal", op["est_wait_min"] <= on["est_wait_min"] and op["saved_min"] >= 0, str((op["est_wait_min"], on["est_wait_min"])))
+s, tp = call("POST", "/turns", {"doc_number": "P" + stamp, "patient_name": "Prioritario Prueba", "age": 72, "service_code": "FAR"}, rec)
+check("turno prioritario guarda el adelanto", s == 201 and tp.get("bonus_min"), str(tp))
+s, lst = call("GET", "/turns", tok=rec)
+far = [x for x in lst if x["service"]["code"] == "FAR" and x["status"] == "WAITING" and x["code"] != tp["code"] and x["patient_name"].startswith("Normal")]
+mine = next(x for x in lst if x["code"] == tp["code"])
+check("prioritario queda delante de los normales recien llegados", bool(far) and all(mine["position"] < x["position"] for x in far), str((mine["position"], [x["position"] for x in far])))
+
+# --- Prueba del modelo (supervisor)
+s, rep = call("GET", "/model/report", tok=sup)
+check("reporte del modelo", s == 200 and rep["samples"] > 0 and "verdict" in rep and rep["cells"], str(rep)[:200])
+check("reporte trae curva y efectividad", "curve" in rep and rep["mae"] is not None and rep["mae_baseline"] is not None, str(rep)[:300])
+check("reporte prohibido a recepcion", call("GET", "/model/report", tok=rec)[0] == 403)
+s, ans = call("POST", "/model/predict", {"service_code": "CG", "preferential": True}, sup)
+check("el modelo responde a una consulta", s == 200 and ans["answer"] and ans["points"] and ans["points"][0]["levels"], str(ans)[:200])
+check("consulta de modelo prohibida a recepcion", call("POST", "/model/predict", {"service_code": "CG"}, rec)[0] == 403)
+
 print("\n" + ("TODO OK" if not FAILS else f"{len(FAILS)} FALLAS: {FAILS}"))
 sys.exit(1 if FAILS else 0)

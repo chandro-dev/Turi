@@ -24,6 +24,8 @@ export const repo = {
   // supervision
   stats: () => api('/stats'),
   simulate: (count) => post('/demo/simulate', { count }),
+  modelReport: () => api('/model/report'),
+  modelPredict: (body) => post('/model/predict', body),
   // publico
   display: () => api('/public/display'),
   lookup: (q) => api('/public/lookup?q=' + encodeURIComponent(q)),

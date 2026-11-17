@@ -107,6 +107,7 @@ class Turn(Base):
     no_show_count: Mapped[int] = mapped_column(Integer, default=0)
     reassign_count: Mapped[int] = mapped_column(Integer, default=0)
     initial_wait_est: Mapped[float | None] = mapped_column(Float, nullable=True)
+    bonus_min: Mapped[float | None] = mapped_column(Float, nullable=True)  # prioridad otorgada por el modelo (min de adelanto)
     created_by: Mapped[str | None] = mapped_column(String(40), nullable=True)
 
     service: Mapped[Service] = relationship(lazy="joined")

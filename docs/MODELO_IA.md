@@ -19,6 +19,25 @@ Implementado en `suggestion-service/app/models/estimator.py`, sin librerías de 
 
 Ventajas: arranca bien sin datos, aprende desde la primera atención, es explicable, no requiere entrenamiento por lotes y consume memoria despreciable.
 
+### 2.1 Medición de efectividad (pantalla "Prueba del modelo")
+
+Cada vez que una atención finaliza, `turnos-api` llama a `/learn` con la duración real y el valor inicial del servicio. Antes de aprender, el servicio registra en `TrainingLog` lo que el modelo **habría predicho** (evaluación honesta, *prequential*) junto con el error de la línea base (solo el valor inicial). Con eso el supervisor ve:
+
+| Métrica | Significado |
+|---|---|
+| Error del modelo (MAE) | Diferencia media absoluta entre minutos predichos y reales |
+| Error sin IA | Lo mismo usando solo el valor inicial del servicio |
+| Mejora | `1 − MAE / MAE base` |
+| Aciertos ±3 min | % de predicciones a 3 minutos o menos de la realidad |
+| Curva de aprendizaje | Error medio móvil (10 atenciones) del modelo frente a la línea base |
+| Madurez por punto | Muestras / 20 por servicio, punto y tipo de paciente |
+
+También puede **consultarse al modelo** (`POST /api/model/predict`): devuelve duración estimada con rango probable, confianza, desglose del cálculo por nivel y a qué punto enviaría hoy a un paciente normal o preferencial.
+
+### 2.2 Atención prioritaria
+
+El modelo no solo estima duraciones: decide cuánta prioridad conceder. Para un paciente preferencial calcula la espera en cada punto con el adelanto mínimo (20 min) y lo incrementa de 5 en 5 hasta cumplir la meta de espera (10 min) o llegar al tope (60 min). Se reporta el ahorro frente a un turno normal. Los parámetros se configuran con `PRIORITY_TARGET_WAIT_MIN`, `PRIORITY_BASE_BONUS_MIN` y `PRIORITY_MAX_BONUS_MIN`.
+
 ## 3. Verificación de scikit-learn
 
 **Pregunta:** ¿se puede implementar scikit-learn en el microservicio?

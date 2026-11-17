@@ -45,7 +45,11 @@ export const tilesView = (services, selected) => services.map((s) => `
 
 export const suggestionView = (r, selectedPoint) => {
   let html = '';
-  if (r.priority_class === 'PREFERENCIAL') html += `<div class="notice">${ic('star')} Atencion preferencial: ${esc(r.priority_reasons.join(' · '))}</div>`;
+  const pref = r.priority_class === 'PREFERENCIAL';
+  if (pref) {
+    html += `<div class="notice prio">${ic('star')}<div><b>Atencion preferencial: ${esc(r.priority_reasons.join(' · '))}</b>
+      <span>El modelo adelanta su turno para que espere como maximo ${r.policy.target_wait_min} min, si la fila lo permite.</span></div></div>`;
+  }
   if (!r.options.length) return html + `<div class="notice">${ic('alert')} No hay puntos disponibles para este servicio.</div>`;
   const max = Math.max(1, ...r.options.map((o) => o.est_wait_min));
   return html + `<div class="ai-box"><div class="ai-title">${ic('spark')} Sugerencia de IA<small>${r.model === 'respaldo-basico' ? 'estimacion basica' : 'aprende de cada atencion'}</small></div>
@@ -54,6 +58,8 @@ export const suggestionView = (r, selectedPoint) => {
         <div class="nm"><b>${esc(o.name)}</b> ${o.recommended ? `<span class="badge b-ai">${ic('spark', 'sm')} Recomendado</span>` : ''}</div>
         <div class="eta"><b>${Math.round(o.est_wait_min)}</b><small>min</small></div>
         <div class="meta">${esc(o.reason)}</div>
+        ${pref ? `<div class="prio-line">${ic('star', 'sm')} Adelanto +${Math.round(o.bonus_min)} min${o.saved_min > 0 ? ` · ahorra ${Math.round(o.saved_min)} min` : ''}
+          <span class="badge ${o.meets_target ? 'b-IN_SERVICE' : 'b-CALLED'} nodot">${o.meets_target ? 'Cumple meta' : 'Supera la meta de ' + r.policy.target_wait_min + ' min'}</span></div>` : ''}
         <div class="meter"><i style="width:${Math.max(6, (o.est_wait_min / max) * 100)}%"></i></div>
       </div>`).join('')}</div></div>`;
 };
@@ -90,6 +96,7 @@ export const ticketModalView = (t) => `
     <div class="big-code">${esc(t.code)}</div>
     <div style="font-size:19px;font-weight:700">${esc(t.patient_name)}</div>
     <div style="opacity:.85">${esc(t.service.name)}${t.priority_class === 'PREFERENCIAL' ? ' · ★ Preferencial' : ''}</div>
+    ${t.priority_class === 'PREFERENCIAL' && t.bonus_min ? `<div class="ticket-prio">★ Prioridad aplicada: adelanto de ${Math.round(t.bonus_min)} min</div>` : ''}
   </div>
   <div class="bottom">
     <div class="line">

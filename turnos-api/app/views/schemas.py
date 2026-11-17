@@ -62,3 +62,9 @@ class ActiveIn(BaseModel):
 
 class SimulateIn(BaseModel):
     count: int = Field(default=8, ge=1, le=40)
+
+
+class ModelPredictIn(BaseModel):
+    service_code: str
+    preferential: bool = False
+    point_id: int | None = None

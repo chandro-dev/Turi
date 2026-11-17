@@ -63,13 +63,14 @@ turnos-api/app/
 │   ├── queueing.py          Orden de la fila, numeración, bitácora
 │   ├── turn_service.py      Casos de uso: crear, editar, cancelar, reasignar, llamar, atender
 │   ├── report_service.py    Indicadores, pantalla pública, consulta del paciente
+│   ├── model_service.py     Prueba del modelo: reporte de entrenamiento y respuestas
 │   ├── suggest_client.py    Cliente del microservicio de IA (con respaldo)
 │   └── errors.py            DomainError (el controlador lo traduce a HTTP)
 ├── views/                   VISTA
 │   ├── schemas.py           Contratos de entrada validados (Pydantic)
 │   └── presenters.py        Entidad -> JSON de salida (oculta datos personales en lo público)
 ├── controllers/             CONTROLADOR (un router por área)
-│   ├── auth.py  catalog.py  turns.py  doctor.py  public.py  supervisor.py
+│   ├── auth.py  catalog.py  turns.py  doctor.py  public.py  supervisor.py  model.py
 └── seeds/                   Datos iniciales y de demostración
 ```
 
@@ -82,10 +83,10 @@ suggestion-service/app/
 ├── main.py                  Ensamblaje
 ├── core/database.py         Motor y sesión
 ├── models/
-│   ├── entities.py          Stat: media de duración por servicio/punto/grupo
-│   └── estimator.py         Algoritmo de estimación y aprendizaje (ver MODELO_IA.md)
+│   ├── entities.py          Stat (media por servicio/punto/grupo) y TrainingLog (predicción vs. realidad)
+│   └── estimator.py         Estimación, aprendizaje y reporte de efectividad (ver MODELO_IA.md)
 ├── views/schemas.py         Contratos JSON de entrada y salida
-└── controllers/routes.py    /suggest  /estimate  /learn  /model/stats  /health
+└── controllers/routes.py    /suggest  /estimate  /predict  /learn  /model/report  /model/stats  /health
 ```
 
 ### 2.3 Aplicación web (cliente)
@@ -104,10 +105,10 @@ web/public/js/
 │   └── constants.js         Estados, roles, rutas de inicio
 ├── views/                   VISTA: funciones puras que devuelven HTML
 │   ├── layout.js  components.js  login.view.js  reception.view.js
-│   ├── doctor.view.js  supervisor.view.js  queue.view.js
+│   ├── doctor.view.js  supervisor.view.js  queue.view.js  model.view.js
 │   └── display.view.js  lookup.view.js
 └── controllers/             CONTROLADOR: cargan datos, pintan la vista, enlazan eventos
-    ├── auth  reception  doctor  supervisor  queue  display  lookup
+    ├── auth  reception  doctor  supervisor  queue  model  display  lookup
     └── shell.js             Estructura común (barra lateral)
 ```
 
@@ -119,7 +120,7 @@ Flujo típico: el *router* elige un controlador → el controlador pide datos al
 |---|---|---|
 | Recepción | Recepción | Registrar paciente, aceptar/cambiar el punto sugerido, editar, reasignar, reincorporar, cancelar. |
 | Atención (médico) | Mi consultorio | Llamar siguiente, llamar de nuevo, iniciar, marcar no presentado, finalizar, pausar el punto. |
-| Supervisión | Indicadores, Fila general | Ver indicadores, ver todos los turnos del día (activos, atendidos, cancelados) con tiempos de espera y atención, simular llegadas. |
+| Supervisión | Indicadores, Fila general, Prueba del modelo | Ver indicadores, ver todos los turnos del día (activos, atendidos, cancelados) con tiempos de espera y atención, simular llegadas, revisar el entrenamiento y la efectividad de la IA y hacerle consultas. |
 | Público (sin sesión) | Pantalla de espera, Consulta | Ver turnos llamados y próximos por punto; consultar un turno por código o documento. |
 
 El acceso se verifica en el servidor (`require(...)` en cada endpoint) y se refleja en el cliente solo para la navegación.
@@ -166,7 +167,8 @@ erDiagram
 |---|---|---|
 | Prioridad preferencial | Edad ≥ 60, gestante o discapacidad. | `services/priority.py` |
 | Rango de edad de gestante | Solo se admite entre **10 y 55 años**. Fuera de ese rango se rechaza (HTTP 422) al sugerir, crear y editar. El cliente además bloquea la opción. | `services/priority.py`, `views/schemas.py`, `models/rules.js` |
-| Orden de la fila | Clave = hora de ingreso − bonificación. Preferencial se adelanta hasta 20 min; reincorporado (BAJA) cede 15 min. | `services/queueing.py` |
+| Orden de la fila | Clave = hora de ingreso − adelanto. Preferencial: adelanto mínimo 20 min; reincorporado (BAJA) cede 15 min. | `services/queueing.py` |
+| Atención prioritaria guiada por el modelo | Al asignar punto, el modelo calcula la espera del paciente prioritario en cada punto y **sube el adelanto de 5 en 5 min (20 → 60)** hasta cumplir la meta de espera (≤ 10 min) o llegar al tope. El adelanto elegido se guarda en el turno (`bonus_min`) y determina su posición. Recepción ve, por punto, el adelanto, los minutos ahorrados y si se cumple la meta. Los normales no reciben adelanto; para los prioritarios pesa más la espera que la duración de su propia atención. | `suggestion-service/controllers/routes.py` (`/suggest`), `services/turn_service.py` |
 | No presentado | Pasa a `NO_SHOW`; recepción lo reincorpora con prioridad baja. | `services/turn_service.py` |
 | Un turno activo por paciente | No se permite duplicar el documento mientras haya un turno activo. | `services/turn_service.py` |
 
@@ -196,13 +198,13 @@ flowchart LR
 
 | Prueba | Alcance | Comando |
 |---|---|---|
-| Unitarias `turnos-api` | Reglas de prioridad y validación de edad | `cd turnos-api && pytest` |
-| Unitarias `suggestion-service` | Sugerencia, estimación y aprendizaje | `cd suggestion-service && pytest` |
-| Extremo a extremo | Edad, fila del supervisor con tiempos, pantalla de espera | `python scripts/e2e.py [URL]` |
+| Unitarias `turnos-api` | Reglas de prioridad, validación de edad y orden de la fila con adelanto | `cd turnos-api && pytest` |
+| Unitarias `suggestion-service` | Sugerencia, adelanto prioritario, aprendizaje, reporte de efectividad y predicción | `cd suggestion-service && pytest` |
+| Extremo a extremo | Edad, fila del supervisor, pantalla de espera, atención prioritaria y prueba del modelo | `python scripts/e2e.py [URL]` |
 
 ## 10. Limitaciones conocidas
 
 - Actualización por consulta periódica (3–5 s), sin WebSockets.
-- Sin migraciones de esquema (las tablas se crean al iniciar).
+- Sin migraciones de esquema formales (las tablas se crean al iniciar; las columnas nuevas se agregan con `ALTER TABLE ... IF NOT EXISTS`).
 - Sin modo sin conexión ni varias sedes.
 - Sin gestión de usuarios en la interfaz (los usuarios se siembran).

@@ -27,7 +27,10 @@ class PointIn(BaseModel):
 class SuggestIn(BaseModel):
     service: str
     preferential: bool = False
-    new_key: float
+    base_key: float               # clave de orden de un turno que llega ahora, SIN bonificacion
+    bonus_min: float = 0.0        # bonificacion minima de prioridad (minutos de adelanto)
+    max_bonus_min: float = 0.0    # tope que el modelo puede otorgar para cumplir la meta
+    target_wait_min: float | None = None  # meta de espera para prioritarios
     prior_minutes: dict[str, float]
     points: list[PointIn]
 
@@ -41,6 +44,10 @@ class Option(BaseModel):
     score: float
     reason: str
     recommended: bool = False
+    bonus_min: float = 0.0               # bonificacion de prioridad que el modelo aplicaria
+    est_wait_normal_min: float = 0.0     # espera que tendria sin prioridad
+    saved_min: float = 0.0               # minutos que ahorra la prioridad
+    meets_target: bool = True            # cumple la meta de espera (solo prioritarios)
 
 
 class SuggestOut(BaseModel):
@@ -63,3 +70,35 @@ class LearnIn(BaseModel):
     point_id: int
     preferential: bool = False
     minutes: float = Field(gt=0)
+    prior_minutes: float | None = None  # valor inicial del servicio: linea base para medir efectividad
+
+
+class ReportIn(BaseModel):
+    prior_minutes: dict[str, float] = {}
+
+
+class PredictIn(BaseModel):
+    service: str
+    point_id: int
+    preferential: bool = False
+    prior_minutes: float
+
+
+class Level(BaseModel):
+    label: str
+    samples: int
+    mean: float
+    estimate: float
+
+
+class PredictOut(BaseModel):
+    service: str
+    point_id: int
+    group: str
+    minutes: float
+    margin: float
+    low: float
+    high: float
+    samples: int
+    confidence_pct: int
+    levels: list[Level]

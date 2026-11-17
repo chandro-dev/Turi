@@ -7,12 +7,12 @@ from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
 
-from ..core.config import TZ
+from ..core.config import PRIORITY_BASE_BONUS_MIN, TZ
 from ..models import BAJA, CALLED, IN_SERVICE, NORMAL, PREFERENCIAL, WAITING, Counter, Service, Turn, TurnEvent
 
 # Ventaja (minutos de espera "virtual") por clase de prioridad.
 # Preferencial se adelanta hasta 20 min a un turno normal; BAJA (no se presento) cede 15 min.
-BONUS_MIN = {PREFERENCIAL: 20, NORMAL: 0, BAJA: -15}
+BONUS_MIN = {PREFERENCIAL: PRIORITY_BASE_BONUS_MIN, NORMAL: 0, BAJA: -15}
 
 
 def now() -> datetime:
@@ -23,13 +23,14 @@ def today() -> date:
     return datetime.now(TZ).date()
 
 
-def key_for(priority_class: str, queued_at: datetime) -> float:
-    """Clave de orden: menor = se atiende antes."""
-    return queued_at.timestamp() - BONUS_MIN[priority_class] * 60
+def key_for(priority_class: str, queued_at: datetime, bonus_min: float | None = None) -> float:
+    """Clave de orden: menor = se atiende antes. `bonus_min` (otorgado por el modelo) reemplaza al valor por defecto."""
+    bonus = BONUS_MIN[priority_class] if bonus_min is None else bonus_min
+    return queued_at.timestamp() - bonus * 60
 
 
 def turn_key(t: Turn) -> float:
-    return key_for(t.priority_class, t.queued_at)
+    return key_for(t.priority_class, t.queued_at, t.bonus_min if t.priority_class == PREFERENCIAL else None)
 
 
 def next_code(db: Session, service: Service) -> tuple[str, date]:

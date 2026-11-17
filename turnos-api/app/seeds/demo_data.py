@@ -106,8 +106,9 @@ def seed_history(db: Session, force: bool = False, seed: int = 42) -> str:
         _build(db, rng, used, s, p, now - timedelta(minutes=rng.randint(1, 35)), WAITING)
 
     db.commit()
+    priors = suggest_client.priors(db)
     for code, pid, pref, dur in learned:
-        suggest_client.learn(code, pid, pref, dur)
+        suggest_client.learn(code, pid, pref, dur, priors.get(code))
     return f"{len(learned)} atendidos, 4 cancelados/no presentados, 14 en espera"
 
 

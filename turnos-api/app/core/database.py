@@ -14,10 +14,19 @@ def get_db():
         yield db
 
 
+def _ensure_columns() -> None:
+    """Migracion minima: agrega columnas nuevas a tablas ya existentes (Postgres)."""
+    from sqlalchemy import text
+
+    with engine.begin() as conn:
+        conn.execute(text("ALTER TABLE turns ADD COLUMN IF NOT EXISTS bonus_min DOUBLE PRECISION"))
+
+
 def init_db(base, retries: int = 30) -> None:
     for i in range(retries):
         try:
             base.metadata.create_all(engine)
+            _ensure_columns()
             return
         except Exception:
             if i == retries - 1:

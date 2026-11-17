@@ -38,6 +38,7 @@ def turn(t: Turn, est: dict | None = None, public: bool = False) -> dict:
         "finished_at": iso(t.finished_at),
         "wait_min": _minutes(t.created_at, t.called_at),          # llegada -> llamado
         "duration_min": _minutes(t.started_at, t.finished_at),    # tiempo de atencion
+        "bonus_min": t.bonus_min,
         "no_show_count": t.no_show_count,
         "reassign_count": t.reassign_count,
     }

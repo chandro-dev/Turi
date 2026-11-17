@@ -32,7 +32,7 @@ Abrir <http://localhost:8080>.
 | recepcion | recepcion123 | Registra, asigna, reasigna, edita, cancela |
 | medico1 / medico2 | medico123 | Consultorio 1 / 2 |
 | laboratorio / farmacia / odontologia | medico123 | Otros puntos |
-| supervisor | supervisor123 | Indicadores y fila general |
+| supervisor | supervisor123 | Indicadores, fila general y prueba del modelo |
 
 Para uso real: `SEED_DEMO=false`, cambia `JWT_SECRET` y `POSTGRES_PASSWORD`, y crea usuarios propios.
 

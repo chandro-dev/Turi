@@ -7,8 +7,8 @@ import httpx
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from ..core.config import SUGGEST_URL
-from ..models import PREFERENCIAL, Point, Service, Turn
+from ..core.config import PRIORITY_BASE_BONUS_MIN, PRIORITY_MAX_BONUS_MIN, PRIORITY_TARGET_WAIT_MIN, SUGGEST_URL
+from ..models import NORMAL, PREFERENCIAL, Point, Service, Turn
 from . import queueing
 
 log = logging.getLogger("turi")
@@ -43,19 +43,20 @@ def point_payload(db: Session, p: Point, queue: list[Turn] | None = None) -> dic
     }
 
 
-def _fallback_suggest(service_code: str, new_key: float, points: list[dict], prior: dict[str, float]) -> list[dict]:
+def _fallback_suggest(service_code: str, key: float, points: list[dict], prior: dict[str, float], bonus: float) -> list[dict]:
     opts = []
     for p in points:
         if not p["active"] or service_code not in p["services"]:
             continue
-        ahead = [q for q in p["queue"] if q["key"] <= new_key]
+        ahead = [q for q in p["queue"] if q["key"] <= key]
         wait = sum(prior.get(q["service"], 10.0) for q in ahead)
         wait += prior.get(p["in_service"]["service"], 10.0) / 2 if p["in_service"] else 0
         opts.append({
             "point_id": p["id"], "name": p["name"], "est_wait_min": round(wait, 1),
             "est_service_min": prior.get(service_code, 10.0), "queue_ahead": len(ahead), "score": wait,
             "reason": f"{len(ahead)} por delante, espera aprox. {round(wait)} min (estimacion basica)",
-            "recommended": False,
+            "recommended": False, "bonus_min": bonus, "est_wait_normal_min": round(wait, 1), "saved_min": 0.0,
+            "meets_target": True,
         })
     opts.sort(key=lambda o: (o["score"], o["queue_ahead"], o["point_id"]))
     if opts:
@@ -66,10 +67,14 @@ def _fallback_suggest(service_code: str, new_key: float, points: list[dict], pri
 def suggest_points(db: Session, service: Service, priority_class: str) -> tuple[list[dict], str]:
     points = [point_payload(db, p) for p in db.execute(select(Point)).scalars().all()]
     prior = priors(db)
-    nk = queueing.key_for(priority_class, queueing.now())
+    pref = priority_class == PREFERENCIAL
+    base_key = queueing.key_for(NORMAL, queueing.now())  # clave sin bonificacion
+    bonus = PRIORITY_BASE_BONUS_MIN if pref else 0.0
     body = {
-        "service": service.code, "preferential": priority_class == PREFERENCIAL,
-        "new_key": nk, "prior_minutes": prior, "points": points,
+        "service": service.code, "preferential": pref, "base_key": base_key,
+        "bonus_min": bonus, "max_bonus_min": PRIORITY_MAX_BONUS_MIN if pref else 0.0,
+        "target_wait_min": PRIORITY_TARGET_WAIT_MIN if pref else None,
+        "prior_minutes": prior, "points": points,
     }
     try:
         r = httpx.post(f"{SUGGEST_URL}/suggest", json=body, timeout=TIMEOUT)
@@ -78,7 +83,7 @@ def suggest_points(db: Session, service: Service, priority_class: str) -> tuple[
         return data["options"], data.get("model", "ia")
     except Exception as e:  # noqa: BLE001
         log.warning("suggestion-service no disponible, usando respaldo: %s", e)
-        return _fallback_suggest(service.code, nk, points, prior), "respaldo-basico"
+        return _fallback_suggest(service.code, base_key - bonus * 60, points, prior, bonus), "respaldo-basico"
 
 
 def estimate_point(db: Session, p: Point) -> dict[int, dict]:
@@ -109,11 +114,18 @@ def estimates_for(db: Session, points: list[Point]) -> dict[int, dict]:
     return est
 
 
-def learn(service_code: str, point_id: int, preferential: bool, minutes: float) -> None:
+def policy() -> dict:
+    """Politica de atencion prioritaria vigente (se muestra en la interfaz)."""
+    return {"target_wait_min": PRIORITY_TARGET_WAIT_MIN, "base_bonus_min": PRIORITY_BASE_BONUS_MIN,
+            "max_bonus_min": PRIORITY_MAX_BONUS_MIN}
+
+
+def learn(service_code: str, point_id: int, preferential: bool, minutes: float, prior: float | None = None) -> None:
     try:
         httpx.post(
             f"{SUGGEST_URL}/learn",
-            json={"service": service_code, "point_id": point_id, "preferential": preferential, "minutes": minutes},
+            json={"service": service_code, "point_id": point_id, "preferential": preferential, "minutes": minutes,
+                  "prior_minutes": prior},
             timeout=TIMEOUT,
         ).raise_for_status()
     except Exception as e:  # noqa: BLE001
