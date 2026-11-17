@@ -14,6 +14,17 @@ router = APIRouter()
 BONUS_STEP_MIN = 5  # el modelo sube la bonificacion de prioridad en pasos de 5 min
 
 
+def fmt_min(m: float, decimals: int = 0) -> str:
+    """Minutos legibles: '45 min'; desde 60 min pasa a horas ('1 h', '1 h 15 min')."""
+    v = round(m, decimals)
+    if decimals == 0:
+        v = int(v)
+    if v < 60:
+        return f"{v:g} min"
+    h, r = divmod(int(round(v)), 60)
+    return f"{h} h {r} min" if r else f"{h} h"
+
+
 def _est(db: Session, cache: dict, service: str, point_id: int, pref: bool, prior: dict[str, float]) -> float:
     if service not in cache:
         cache[service] = estimator.load_table(db, service)
@@ -70,7 +81,7 @@ def suggest(body: SuggestIn, db: Session = Depends(get_db)):
         score = wait + (0.05 if body.preferential else 0.25) * mine
         options.append(Option(
             point_id=p.id, name=p.name, est_wait_min=round(wait, 1), est_service_min=round(mine, 1),
-            queue_ahead=ahead, score=round(score, 2), reason=f"{who}{busy}, espera aprox. {round(wait)} min",
+            queue_ahead=ahead, score=round(score, 2), reason=f"{who}{busy}, espera aprox. {fmt_min(wait)}",
             bonus_min=round(bonus, 1), est_wait_normal_min=round(normal_wait, 1),
             saved_min=round(max(normal_wait - wait, 0.0), 1), meets_target=meets,
         ))

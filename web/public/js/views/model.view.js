@@ -1,5 +1,6 @@
 /* VISTA: prueba del modelo de IA (entrenamiento, efectividad y consultas). */
 import { esc } from '../core/dom.js';
+import { fmtMin } from '../core/format.js';
 import { ic } from '../core/icons.js';
 import { emptyState } from './components.js';
 import { headView } from './layout.js';
@@ -55,23 +56,23 @@ export const reportView = (r) => {
   const improv = r.improvement_pct;
   return `
     <div class="verdict v-${v.level}">${ic(VERDICT_ICON[v.level])}<div><b>${esc(v.text)}</b>
-      <span>Politica de prioridad vigente: meta de espera ≤ ${num(r.policy.target_wait_min)} min, adelanto de ${num(r.policy.base_bonus_min)} a ${num(r.policy.max_bonus_min)} min segun lo decida el modelo.</span></div></div>
+      <span>Politica de prioridad vigente: meta de espera ≤ ${fmtMin(r.policy.target_wait_min)}, adelanto de ${fmtMin(r.policy.base_bonus_min)} a ${fmtMin(r.policy.max_bonus_min)} segun lo decida el modelo.</span></div></div>
     <div class="kpis">
       ${kpi('activity', '#0d9488', 'Atenciones aprendidas', r.samples, '', 'muestras de entrenamiento')}
-      ${kpi('clock', '#4f46e5', 'Error del modelo', num(r.mae), 'min', 'error medio absoluto')}
-      ${kpi('alert', '#94a3b8', 'Error sin IA', num(r.mae_baseline), 'min', 'solo valor inicial')}
+      ${kpi('clock', '#4f46e5', 'Error del modelo', fmtMin(r.mae, 1), '', 'error medio absoluto')}
+      ${kpi('alert', '#94a3b8', 'Error sin IA', fmtMin(r.mae_baseline, 1), '', 'solo valor inicial')}
       ${kpi('trend', '#16a34a', 'Mejora', improv == null ? '-' : `${improv > 0 ? '+' : ''}${num(improv, 0)}`, '%', 'frente a no aprender')}
       ${kpi('check', '#0ea5e9', 'Aciertos ±3 min', num(r.within_3min_pct, 0), '%', 'prediccion cercana')}
     </div>
     <div class="grid-2 stretch" style="grid-template-columns:1.6fr 1fr;margin-bottom:24px">
       <section class="card"><div class="card-head"><h2><span class="ic">${ic('trend')}</span>Curva de aprendizaje</h2></div>
         ${curveChart(r.curve)}
-        ${r.mae_early != null && r.samples >= 40 ? `<div class="notice info" style="margin-top:14px">Error de las primeras 20 atenciones: <b>${num(r.mae_early)} min</b> · de las ultimas 20: <b>${num(r.mae_recent)} min</b>.</div>` : ''}
+        ${r.mae_early != null && r.samples >= 40 ? `<div class="notice info" style="margin-top:14px">Error de las primeras 20 atenciones: <b>${fmtMin(r.mae_early, 1)}</b> · de las ultimas 20: <b>${fmtMin(r.mae_recent, 1)}</b>.</div>` : ''}
       </section>
       <section class="card"><div class="card-head"><h2><span class="ic">${ic('steth')}</span>Efectividad por servicio</h2></div>
         ${r.by_service.length ? `<div class="vs">${r.by_service.map((s) => `
           <div><div style="display:flex;justify-content:space-between"><b>${esc(s.name)}</b><span class="muted">${s.samples} atenciones</span></div>
-          <div class="eff"><span>Modelo ${num(s.mae)} min</span><span class="muted">base ${num(s.mae_baseline)} min</span>
+          <div class="eff"><span>Modelo ${fmtMin(s.mae, 1)}</span><span class="muted">base ${fmtMin(s.mae_baseline, 1)}</span>
           ${s.improvement_pct != null ? `<span class="badge ${s.improvement_pct >= 0 ? 'b-IN_SERVICE' : 'b-CANCELLED'} nodot">${s.improvement_pct > 0 ? '+' : ''}${num(s.improvement_pct, 0)}%</span>` : ''}</div></div>`).join('')}</div>`
           : emptyState('list', 'Sin datos', 'Aparece al finalizar atenciones.')}
       </section>
@@ -80,7 +81,7 @@ export const reportView = (r) => {
       <span class="muted">Madurez = muestras / ${r.mature_samples}</span></div>
       ${r.cells.length ? `<div class="tbl-wrap"><table class="tbl"><thead><tr><th>Servicio</th><th>Punto</th><th>Paciente</th><th>Muestras</th><th>Valor inicial</th><th>Aprendido</th><th>Estimacion</th><th style="min-width:120px">Madurez</th></tr></thead><tbody>
         ${r.cells.map((c) => `<tr><td>${esc(c.service_name)}</td><td><b>${esc(c.point_name)}</b></td><td>${GROUP[c.group] || c.group}</td><td>${c.samples}</td>
-          <td>${num(c.prior_min)} min</td><td>${num(c.mean_min)} min</td><td><b>${num(c.estimate_min)} min</b></td><td>${maturityBar(c.maturity_pct)}</td></tr>`).join('')}
+          <td>${fmtMin(c.prior_min, 1)}</td><td>${fmtMin(c.mean_min, 1)}</td><td><b>${fmtMin(c.estimate_min, 1)}</b></td><td>${maturityBar(c.maturity_pct)}</td></tr>`).join('')}
       </tbody></table></div>` : emptyState('activity', 'Sin entrenamiento', 'El modelo empieza a aprender con la primera atencion finalizada.')}
     </section>`;
 };
@@ -97,14 +98,14 @@ export const answerView = (a) => {
     <div class="tbl-wrap"><table class="tbl"><thead><tr><th>Punto</th><th>Duracion estimada</th><th>Rango probable</th><th>Confianza</th><th>Espera ahora</th>${a.preferential ? '<th>Prioridad</th>' : ''}</tr></thead><tbody>
       ${a.points.map((p) => `<tr class="${p.recommended ? 'rec' : ''}">
         <td><b>${esc(p.name)}</b> ${p.recommended ? `<span class="badge b-ai">${ic('spark', 'sm')} Recomendado</span>` : ''}${p.active ? '' : ' <span class="badge b-low">En pausa</span>'}</td>
-        <td><b>${num(p.minutes)} min</b></td>
-        <td style="min-width:150px">${rangeBar(p.low, p.high, p.minutes, max)}<small class="muted">${num(p.low)} – ${num(p.high)} min</small></td>
+        <td><b>${fmtMin(p.minutes, 1)}</b></td>
+        <td style="min-width:150px">${rangeBar(p.low, p.high, p.minutes, max)}<small class="muted">${fmtMin(p.low, 1)} – ${fmtMin(p.high, 1)}</small></td>
         <td>${p.confidence_pct}% <small class="muted">(${p.samples} muestras)</small></td>
-        <td>${p.est_wait_min == null ? '-' : `<b>${num(p.est_wait_min, 0)} min</b>`}</td>
-        ${a.preferential ? `<td>${p.est_wait_min == null ? '-' : `+${num(p.bonus_min, 0)} min adelanto · ahorra ${num(p.saved_min, 0)} min ${p.meets_target ? '<span class="badge b-IN_SERVICE nodot">Cumple meta</span>' : '<span class="badge b-CALLED nodot">No cumple meta</span>'}`}</td>` : ''}
+        <td>${p.est_wait_min == null ? '-' : `<b>${fmtMin(p.est_wait_min)}</b>`}</td>
+        ${a.preferential ? `<td>${p.est_wait_min == null ? '-' : `+${fmtMin(p.bonus_min)} adelanto · ahorra ${fmtMin(p.saved_min)} ${p.meets_target ? '<span class="badge b-IN_SERVICE nodot">Cumple meta</span>' : '<span class="badge b-CALLED nodot">No cumple meta</span>'}`}</td>` : ''}
       </tr>`).join('')}
     </tbody></table></div>
     ${best ? `<details class="how"><summary>Como calculo la duracion en ${esc(best.name)}</summary>
-      <ol>${best.levels.map((l) => `<li><b>${esc(l.label)}</b>: ${l.samples ? `${l.samples} muestras, media ${num(l.mean)} min` : `${num(l.mean)} min`} <span class="muted">→ estimacion ${num(l.estimate)} min</span></li>`).join('')}</ol>
+      <ol>${best.levels.map((l) => `<li><b>${esc(l.label)}</b>: ${l.samples ? `${l.samples} muestras, media ${fmtMin(l.mean, 1)}` : fmtMin(l.mean, 1)} <span class="muted">→ estimacion ${fmtMin(l.estimate, 1)}</span></li>`).join('')}</ol>
       <p class="muted">Cada nivel mezcla su media con la del nivel anterior segun cuantas muestras tiene: con pocas confia en lo general, con muchas confia en lo propio del punto.</p></details>` : ''}`;
 };

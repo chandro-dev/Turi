@@ -1,5 +1,6 @@
 /* VISTA: indicadores del supervisor. */
 import { esc } from '../core/dom.js';
+import { fmtMin } from '../core/format.js';
 import { ic } from '../core/icons.js';
 import { STATUS, STATUS_COLOR } from '../models/constants.js';
 import { headView } from './layout.js';
@@ -30,15 +31,15 @@ export const statsView = (s) => {
     return `<div class="pcard"><div class="top"><b>${esc(p.name)}</b>${state}</div>
       <div class="num">${p.waiting}</div><small>en espera</small>
       <div class="load"><i style="width:${pct}%;background:${pct > 70 ? '#e11d48' : pct > 40 ? '#f59e0b' : '#14b8a6'}"></i></div>
-      <small>${p.done} atendidos · prom. ${p.avg_service_min ?? '-'} min</small></div>`;
+      <small>${p.done} atendidos · prom. ${fmtMin(p.avg_service_min, 1)}</small></div>`;
   }).join('');
 
   return `
     <div class="kpis">
       ${kpi('ticket', '#0d9488', 'Turnos hoy', s.total, '', `${by.DONE || 0} atendidos`)}
       ${kpi('users', '#0ea5e9', 'En espera', by.WAITING || 0, '', `${(by.CALLED || 0) + (by.IN_SERVICE || 0)} en atencion`)}
-      ${kpi('clock', '#f59e0b', 'Espera promedio', s.avg_wait_min ?? '-', 'min', 'hasta ser llamado')}
-      ${kpi('activity', '#4f46e5', 'Atencion promedio', s.avg_service_min ?? '-', 'min', 'duracion real')}
+      ${kpi('clock', '#f59e0b', 'Espera promedio', fmtMin(s.avg_wait_min, 1), '', 'hasta ser llamado')}
+      ${kpi('activity', '#4f46e5', 'Atencion promedio', fmtMin(s.avg_service_min, 1), '', 'duracion real')}
       ${kpi('star', '#d97706', 'Preferenciales', s.priority.total, '', 'adulto mayor, gestante, disc.')}
       ${kpi('alert', '#8b5cf6', 'No se presentaron', s.no_shows_total, '', `${s.reassigned} reasignados`)}
     </div>
@@ -55,8 +56,8 @@ export const statsView = (s) => {
       </section>
       <section class="card"><div class="card-head"><h2><span class="ic">${ic('star')}</span>Prioridad vs. espera</h2></div>
         <div class="vs">
-          <div class="r"><span>Preferencial</span><div class="hbar"><i style="width:${((pw || 0) / wmax) * 100}%;background:#f59e0b"></i></div><b>${pw ?? '-'}m</b></div>
-          <div class="r"><span>Normal</span><div class="hbar"><i style="width:${((nw || 0) / wmax) * 100}%;background:#0ea5e9"></i></div><b>${nw ?? '-'}m</b></div>
+          <div class="r"><span>Preferencial</span><div class="hbar"><i style="width:${((pw || 0) / wmax) * 100}%;background:#f59e0b"></i></div><b>${fmtMin(pw, 1)}</b></div>
+          <div class="r"><span>Normal</span><div class="hbar"><i style="width:${((nw || 0) / wmax) * 100}%;background:#0ea5e9"></i></div><b>${fmtMin(nw, 1)}</b></div>
         </div>
         <div class="legend" style="margin-top:20px">${Object.entries(s.priority.reasons).map(([k, v]) => `<div>${ic('star', 'sm')}${esc(k)}<b>${v}</b></div>`).join('') || '<span class="muted">Sin casos prioritarios</span>'}</div>
       </section>

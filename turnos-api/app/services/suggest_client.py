@@ -15,6 +15,17 @@ log = logging.getLogger("turi")
 TIMEOUT = 3.0
 
 
+def fmt_min(m: float, decimals: int = 0) -> str:
+    """Minutos legibles: '45 min'; desde 60 min pasa a horas ('1 h', '1 h 15 min')."""
+    v = round(m, decimals)
+    if decimals == 0:
+        v = int(v)
+    if v < 60:
+        return f"{v:g} min"
+    h, r = divmod(int(round(v)), 60)
+    return f"{h} h {r} min" if r else f"{h} h"
+
+
 def priors(db: Session) -> dict[str, float]:
     return {s.code: s.prior_minutes for s in db.execute(select(Service)).scalars().all()}
 
@@ -54,7 +65,7 @@ def _fallback_suggest(service_code: str, key: float, points: list[dict], prior: 
         opts.append({
             "point_id": p["id"], "name": p["name"], "est_wait_min": round(wait, 1),
             "est_service_min": prior.get(service_code, 10.0), "queue_ahead": len(ahead), "score": wait,
-            "reason": f"{len(ahead)} por delante, espera aprox. {round(wait)} min (estimacion basica)",
+            "reason": f"{len(ahead)} por delante, espera aprox. {fmt_min(wait)} (estimacion basica)",
             "recommended": False, "bonus_min": bonus, "est_wait_normal_min": round(wait, 1), "saved_min": 0.0,
             "meets_target": True,
         })

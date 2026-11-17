@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from ..core.config import SUGGEST_URL
 from ..models import NORMAL, PREFERENCIAL, Point, Service
 from . import suggest_client, turn_service
+from .suggest_client import fmt_min
 from .errors import DomainError
 
 TIMEOUT = 5.0
@@ -74,12 +75,12 @@ def predict(db: Session, service_code: str, preferential: bool, point_id: int | 
         answer = f"Ningun punto de {service.name} esta disponible ahora: todos estan en pausa."
     else:
         answer = (f"Para un {who} en {service.name}, el modelo recomienda {best['name']}: "
-                  f"atencion de ~{best['minutes']:.0f} min (entre {best['low']:.0f} y {best['high']:.0f}) "
-                  f"y espera de ~{best['est_wait_min']:.0f} min.")
+                  f"atencion de ~{fmt_min(best['minutes'])} (entre {fmt_min(best['low'])} y {fmt_min(best['high'])}) "
+                  f"y espera de ~{fmt_min(best['est_wait_min'])}.")
         if preferential and best["saved_min"] > 0:
-            answer += (f" La prioridad le ahorra {best['saved_min']:.0f} min frente a un turno normal"
-                       f" (adelanto aplicado: {best['bonus_min']:.0f} min).")
+            answer += (f" La prioridad le ahorra {fmt_min(best['saved_min'])} frente a un turno normal"
+                       f" (adelanto aplicado: {fmt_min(best['bonus_min'])}).")
         if preferential and best["meets_target"] is False:
-            answer += f" Aun asi no se alcanza la meta de {suggest_client.policy()['target_wait_min']:.0f} min."
+            answer += f" Aun asi no se alcanza la meta de {fmt_min(suggest_client.policy()['target_wait_min'])}."
     return {"service": {"code": service.code, "name": service.name}, "preferential": preferential,
             "answer": answer, "points": rows, "policy": suggest_client.policy(), "model": model}

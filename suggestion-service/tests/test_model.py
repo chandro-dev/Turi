@@ -93,3 +93,9 @@ def test_report_without_data_is_insufficient():
     with TestClient(app) as c:
         r = c.post("/model/report", json={"prior_minutes": PRIOR}).json()
         assert r["samples"] == 0 and r["verdict"]["level"] == "insufficient"
+
+
+def test_fmt_min_switches_to_hours_at_60():
+    from app.controllers.routes import fmt_min
+
+    assert fmt_min(59) == "59 min" and fmt_min(60) == "1 h" and fmt_min(90) == "1 h 30 min"

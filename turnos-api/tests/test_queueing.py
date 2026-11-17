@@ -34,3 +34,15 @@ def test_requeued_patient_ignores_bonus_and_yields():
 
 def test_normal_ignores_bonus_field():
     assert queueing.turn_key(turn(NORMAL, 0, bonus=50)) == queueing.turn_key(turn(NORMAL, 0))
+
+
+def test_fmt_min_switches_to_hours_at_60():
+    from app.services.suggest_client import fmt_min
+
+    assert fmt_min(0) == "0 min"
+    assert fmt_min(45.4) == "45 min"
+    assert fmt_min(59.4) == "59 min"
+    assert fmt_min(60) == "1 h"
+    assert fmt_min(75) == "1 h 15 min"
+    assert fmt_min(125.6) == "2 h 6 min"
+    assert fmt_min(5.5, 1) == "5.5 min"

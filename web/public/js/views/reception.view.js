@@ -1,6 +1,6 @@
 /* VISTA: recepcion (registro de pacientes y fila activa). */
 import { esc } from '../core/dom.js';
-import { greeting, mins, timeOf } from '../core/format.js';
+import { fmtMin, greeting, minParts, mins, timeOf } from '../core/format.js';
 import { ic, initials, SERVICE_ICON } from '../core/icons.js';
 import { MAX_AGE } from '../models/rules.js';
 import { emptyState, prioBadge, statusBadge } from './components.js';
@@ -41,14 +41,14 @@ export const receptionView = (user) => `
 export const tilesView = (services, selected) => services.map((s) => `
   <button type="button" class="tile ${selected === s.code ? 'on' : ''}" data-c="${s.code}" style="--tile:${s.color}">
     <div class="tic">${ic(SERVICE_ICON[s.code] || 'activity')}</div>
-    <div><b>${esc(s.name)}</b><small>~${s.prior_minutes} min por paciente</small></div></button>`).join('');
+    <div><b>${esc(s.name)}</b><small>~${fmtMin(s.prior_minutes)} por paciente</small></div></button>`).join('');
 
 export const suggestionView = (r, selectedPoint) => {
   let html = '';
   const pref = r.priority_class === 'PREFERENCIAL';
   if (pref) {
     html += `<div class="notice prio">${ic('star')}<div><b>Atencion preferencial: ${esc(r.priority_reasons.join(' · '))}</b>
-      <span>El modelo adelanta su turno para que espere como maximo ${r.policy.target_wait_min} min, si la fila lo permite.</span></div></div>`;
+      <span>El modelo adelanta su turno para que espere como maximo ${fmtMin(r.policy.target_wait_min)}, si la fila lo permite.</span></div></div>`;
   }
   if (!r.options.length) return html + `<div class="notice">${ic('alert')} No hay puntos disponibles para este servicio.</div>`;
   const max = Math.max(1, ...r.options.map((o) => o.est_wait_min));
@@ -56,10 +56,10 @@ export const suggestionView = (r, selectedPoint) => {
     <div class="options">${r.options.map((o) => `
       <div class="opt ${o.point_id === selectedPoint ? 'on' : ''}" data-p="${o.point_id}">
         <div class="nm"><b>${esc(o.name)}</b> ${o.recommended ? `<span class="badge b-ai">${ic('spark', 'sm')} Recomendado</span>` : ''}</div>
-        <div class="eta"><b>${Math.round(o.est_wait_min)}</b><small>min</small></div>
+        <div class="eta"><b>${minParts(o.est_wait_min)[0]}</b><small>${minParts(o.est_wait_min)[1]}</small></div>
         <div class="meta">${esc(o.reason)}</div>
-        ${pref ? `<div class="prio-line">${ic('star', 'sm')} Adelanto +${Math.round(o.bonus_min)} min${o.saved_min > 0 ? ` · ahorra ${Math.round(o.saved_min)} min` : ''}
-          <span class="badge ${o.meets_target ? 'b-IN_SERVICE' : 'b-CALLED'} nodot">${o.meets_target ? 'Cumple meta' : 'Supera la meta de ' + r.policy.target_wait_min + ' min'}</span></div>` : ''}
+        ${pref ? `<div class="prio-line">${ic('star', 'sm')} Adelanto +${fmtMin(o.bonus_min)}${o.saved_min > 0 ? ` · ahorra ${fmtMin(o.saved_min)}` : ''}
+          <span class="badge ${o.meets_target ? 'b-IN_SERVICE' : 'b-CALLED'} nodot">${o.meets_target ? 'Cumple meta' : 'Supera la meta de ' + fmtMin(r.policy.target_wait_min)}</span></div>` : ''}
         <div class="meter"><i style="width:${Math.max(6, (o.est_wait_min / max) * 100)}%"></i></div>
       </div>`).join('')}</div></div>`;
 };
@@ -96,7 +96,7 @@ export const ticketModalView = (t) => `
     <div class="big-code">${esc(t.code)}</div>
     <div style="font-size:19px;font-weight:700">${esc(t.patient_name)}</div>
     <div style="opacity:.85">${esc(t.service.name)}${t.priority_class === 'PREFERENCIAL' ? ' · ★ Preferencial' : ''}</div>
-    ${t.priority_class === 'PREFERENCIAL' && t.bonus_min ? `<div class="ticket-prio">★ Prioridad aplicada: adelanto de ${Math.round(t.bonus_min)} min</div>` : ''}
+    ${t.priority_class === 'PREFERENCIAL' && t.bonus_min ? `<div class="ticket-prio">★ Prioridad aplicada: adelanto de ${fmtMin(t.bonus_min)}</div>` : ''}
   </div>
   <div class="bottom">
     <div class="line">
