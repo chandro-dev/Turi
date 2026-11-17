@@ -412,3 +412,27 @@ input:focus, select:focus { outline: none; background: #fff; border-color: var(-
   .tv { padding: 24px; }
   .call.first .c { font-size: 90px; }
 }
+
+/* ---------- v2.1: validacion de edad, fila general, pantalla de espera ---------- */
+.hint { margin-top: 8px; font-size: 13px; font-weight: 600; color: #b45309; background: #fff4de; padding: 8px 12px; border-radius: 10px; }
+.chip-toggle.disabled { opacity: .4; cursor: not-allowed; text-decoration: line-through; }
+.chip-toggle.disabled:hover { border-color: var(--line); }
+.titem.done { background: #f7fafc; }
+.titem.done::before { background: #94a3b8; }
+.titem .detail { display: flex; flex-direction: column; gap: 1px; color: var(--muted); font-size: 13px; }
+.tv-next .npt { padding: 16px 20px; background: rgba(255, 255, 255, .06); border: 1px solid rgba(255, 255, 255, .08); border-radius: 20px; margin-bottom: 14px; }
+.tv-next .npt .t { display: flex; justify-content: space-between; align-items: baseline; font-size: 21px; font-weight: 700; margin-bottom: 12px; }
+.tv-next .npt .t small { font-size: 14px; font-weight: 600; color: #7da6b6; }
+.tv-next .chipsrow { display: flex; flex-wrap: wrap; gap: 10px; }
+.tv-next .tchip { font-size: 24px; font-weight: 800; letter-spacing: -.01em; padding: 8px 16px; border-radius: 14px; background: rgba(255, 255, 255, .08); border: 1px solid rgba(255, 255, 255, .12); font-variant-numeric: tabular-nums; }
+.tv-next .tchip em { font-style: normal; color: #fbbf24; margin-left: 6px; }
+.tv-next .tchip.first { font-size: 32px; background: color-mix(in srgb, var(--c) 35%, transparent); border-color: var(--c); box-shadow: 0 0 24px color-mix(in srgb, var(--c) 40%, transparent); }
+.tv-next .tchip.first::before { content: "Siguiente"; display: block; font-size: 11px; letter-spacing: .14em; text-transform: uppercase; font-weight: 700; color: #bfe0e8; margin-bottom: 2px; }
+.tv-next .none { color: #6f95a1; font-size: 18px; }
+.tv-next .npt.off { opacity: .45; }
+.tv-grid { grid-template-columns: 1fr 1.3fr; }
+.tv-next #next { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 14px; }
+.tv-next .npt { margin-bottom: 0; }
+.tv-next .tchip { font-size: 20px; padding: 6px 12px; }
+.tv-next .tchip.first { font-size: 28px; }
+@media (max-width: 1000px) { .tv-grid { grid-template-columns: 1fr; } }

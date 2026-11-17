@@ -1,7 +1,7 @@
 """Datos de prueba: historial del dia (para entrenar la IA) y pacientes en fila.
 
 Se ejecuta al iniciar si SEED_DEMO=true y no hay turnos.
-Manual:  docker compose exec turnos-api python -m app.demo_data
+Manual:  docker compose exec turnos-api python -m app.seeds.demo_data
 """
 import random
 from datetime import timedelta
@@ -9,8 +9,8 @@ from datetime import timedelta
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from . import logic
-from .models import (
+from ..services import priority, queueing, suggest_client
+from ..models import (
     CANCELLED,
     DONE,
     NO_SHOW,
@@ -43,15 +43,15 @@ def _patient(rng: random.Random, used: set[str]) -> dict:
         "doc_number": doc,
         "patient_name": rng.choice(NAMES),
         "age": age,
-        "pregnant": rng.random() < 0.07,
+        "pregnant": 10 <= age <= 55 and rng.random() < 0.07,
         "disability": rng.random() < 0.06,
     }
 
 
 def _build(db: Session, rng, used, service: Service, point: Point, created_at, status: str) -> Turn:
     p = _patient(rng, used)
-    cls, reasons = logic.classify(p["age"], p["pregnant"], p["disability"])
-    code, day = logic.next_code(db, service)
+    cls, reasons = priority.classify(p["age"], p["pregnant"], p["disability"])
+    code, day = queueing.next_code(db, service)
     t = Turn(
         code=code, day=day, service_id=service.id, point_id=point.id, priority_class=cls,
         priority_reasons=",".join(reasons), status=status, created_at=created_at, queued_at=created_at,
@@ -59,7 +59,7 @@ def _build(db: Session, rng, used, service: Service, point: Point, created_at, s
     )
     db.add(t)
     db.flush()
-    logic.add_event(db, t, "CREATED", "seed", "seed")
+    queueing.add_event(db, t, "CREATED", "seed", "seed")
     return t
 
 
@@ -71,7 +71,7 @@ def seed_history(db: Session, force: bool = False, seed: int = 42) -> str:
     services = db.execute(select(Service).order_by(Service.id)).scalars().all()
     points = db.execute(select(Point).order_by(Point.id)).scalars().all()
     serving = {s.code: [p for p in points if s.code in [x.code for x in p.services]] for s in services}
-    now = logic.now()
+    now = queueing.now()
     learned = []
 
     # 1) Historial atendido (entrena la IA)
@@ -107,12 +107,12 @@ def seed_history(db: Session, force: bool = False, seed: int = 42) -> str:
 
     db.commit()
     for code, pid, pref, dur in learned:
-        logic.learn(code, pid, pref, dur)
+        suggest_client.learn(code, pid, pref, dur)
     return f"{len(learned)} atendidos, 4 cancelados/no presentados, 14 en espera"
 
 
 if __name__ == "__main__":
-    from .db import SessionLocal
+    from ..core.database import SessionLocal
 
     with SessionLocal() as db:
         print(seed_history(db, force=True))

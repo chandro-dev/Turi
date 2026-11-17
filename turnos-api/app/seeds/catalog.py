@@ -1,8 +1,8 @@
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from .models import Point, Service, User
-from .security import hash_password
+from ..models import Point, Service, User
+from ..core.security import hash_password
 
 SERVICES = [
     ("CG", "Consulta general", 12, "#0f766e"),

@@ -1,6 +1,8 @@
 # Turi - Gestion y priorizacion de turnos en salud (MVP)
 
-## Arranque
+Produccion de demostracion: <https://turi.alejocarretero.site>
+
+## Arranque local
 
 ```bash
 cp .env.example .env      # opcional, hay valores por defecto para desarrollo
@@ -9,46 +11,51 @@ docker compose up --build
 
 Abrir <http://localhost:8080>.
 
-## Arquitectura
+## Documentacion
+
+- [Arquitectura (componentes, responsabilidades, MVC)](docs/ARQUITECTURA.md)
+- [Modelo de IA y verificacion de scikit-learn](docs/MODELO_IA.md)
+
+## Componentes
 
 | Servicio | Tecnologia | Funcion |
 |---|---|---|
-| `web` | nginx + JS vanilla | Interfaz (recepcion, atencion, supervision, pantalla, consulta). Proxy `/api` |
-| `turnos-api` | FastAPI + SQLAlchemy | Autenticacion por rol (JWT), turnos, prioridad, fila, auditoria |
-| `suggestion-service` | FastAPI + SQLAlchemy | Microservicio de IA: sugiere punto de atencion y estima esperas |
-| `db` | PostgreSQL 16 | Bases `turi` (negocio) y `turi_suggest` (modelo) |
-
-Si `suggestion-service` cae, `turnos-api` usa una estimacion basica y sigue operando.
+| `turi-web` | nginx + JS (modulos ES, MVC) | Interfaz y proxy de `/api` |
+| `turnos-api` | FastAPI + SQLAlchemy (MVC) | Autenticacion por rol, turnos, prioridad, fila, auditoria |
+| `suggestion-service` | FastAPI + SQLAlchemy (MVC) | IA: sugiere punto de atencion y estima esperas |
+| `db` | PostgreSQL 16 | Bases `turi` y `turi_suggest` |
 
 ## Usuarios demo (`SEED_DEMO=true`)
 
 | Usuario | Clave | Rol |
 |---|---|---|
-| recepcion | recepcion123 | Registra pacientes, asigna, reasigna, edita, cancela |
-| medico1 / medico2 | medico123 | Consultorio 1 / 2: llama, atiende, marca no presentado |
+| recepcion | recepcion123 | Registra, asigna, reasigna, edita, cancela |
+| medico1 / medico2 | medico123 | Consultorio 1 / 2 |
 | laboratorio / farmacia / odontologia | medico123 | Otros puntos |
-| supervisor | supervisor123 | Indicadores, simulador de llegadas |
+| supervisor | supervisor123 | Indicadores y fila general |
 
 Para uso real: `SEED_DEMO=false`, cambia `JWT_SECRET` y `POSTGRES_PASSWORD`, y crea usuarios propios.
 
-## Flujo
+## Datos de prueba
 
-1. Recepcion registra al paciente. Edad >= 60, gestante o discapacidad dan prioridad preferencial (adelanta hasta 20 min en la fila).
-2. La IA sugiere el punto con menor espera estimada. Recepcion puede elegir otro.
-3. Pantalla publica (`#/pantalla`) y consulta del paciente (`#/consulta`, por codigo o documento).
-4. Atencion llama, inicia, finaliza o marca "no se presento". Al finalizar, la duracion real alimenta el modelo.
-5. Un turno no presentado se reincorpora desde recepcion con prioridad baja (cede 15 min).
+Se cargan solos al iniciar con `SEED_DEMO=true` y sin turnos. Para agregar otro lote:
 
-## Modelo de IA
-
-Media online de duracion por (servicio, punto, grupo normal/preferencial) con contraccion bayesiana hacia niveles mas generales y el valor inicial del servicio. Espera de un punto = tiempo restante del paciente actual + duraciones estimadas de quienes van antes. Ver `suggestion-service/app/model.py`. Estadisticas: `GET /model/stats` en el servicio (puerto interno 8001).
+```bash
+docker compose exec turnos-api python -m app.seeds.demo_data
+```
 
 ## Pruebas
 
 ```bash
+cd turnos-api && pip install -r requirements.txt pytest && pytest
 cd suggestion-service && pip install -r requirements.txt pytest httpx && pytest
+python scripts/e2e.py http://localhost:8080      # extremo a extremo (requiere el stack arriba)
 ```
 
-## Limitaciones del MVP
+## Despliegue en servidor con Caddy
 
-Actualizacion por polling (3-5 s), sin migraciones (tablas creadas al iniciar), sin modo offline ni multi-sede.
+```bash
+docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+```
+
+No publica puertos; `turi-web` se une a la red `ecd-vps_default` del Caddy existente.

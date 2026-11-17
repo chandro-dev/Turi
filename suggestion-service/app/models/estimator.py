@@ -15,7 +15,7 @@ from __future__ import annotations
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from .db import Stat
+from .entities import Stat
 
 K = 3.0
 CAP = 50

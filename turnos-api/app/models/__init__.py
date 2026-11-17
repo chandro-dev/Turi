@@ -1,0 +1,22 @@
+"""MODELO (M): entidades de dominio persistidas en PostgreSQL."""
+from .entities import (  # noqa: F401
+    ACTIVE_STATUSES,
+    BAJA,
+    CALLED,
+    CANCELLED,
+    DONE,
+    IN_SERVICE,
+    NO_SHOW,
+    NORMAL,
+    PREFERENCIAL,
+    WAITING,
+    Base,
+    Counter,
+    Point,
+    Service,
+    Turn,
+    TurnEvent,
+    User,
+    point_services,
+    utcnow,
+)

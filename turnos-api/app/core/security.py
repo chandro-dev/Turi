@@ -9,8 +9,8 @@ from fastapi import Depends, Header, HTTPException
 from sqlalchemy.orm import Session
 
 from .config import JWT_HOURS, JWT_SECRET
-from .db import get_db
-from .models import User
+from .database import get_db
+from ..models import User
 
 ITERATIONS = 120_000
 
