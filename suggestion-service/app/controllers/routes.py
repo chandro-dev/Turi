@@ -4,7 +4,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ..core.database import get_db
-from ..models import estimator
+from ..models import estimator, sk_model
 from ..models.entities import Stat, TrainingLog
 from ..views.schemas import (
     EstimateIn, EstimateOut, LearnIn, Option, PointIn, PredictIn, PredictOut, ReportIn, SuggestIn, SuggestOut,
@@ -28,7 +28,8 @@ def fmt_min(m: float, decimals: int = 0) -> str:
 def _est(db: Session, cache: dict, service: str, point_id: int, pref: bool, prior: dict[str, float]) -> float:
     if service not in cache:
         cache[service] = estimator.load_table(db, service)
-    return estimator.estimate(cache[service], str(point_id), pref, prior.get(service, 10.0))
+    return estimator.estimate(cache[service], str(point_id), pref, prior.get(service, 10.0),
+                              service=service, hour=cache.get("_hour"))
 
 
 def _remaining(db: Session, p: PointIn, prior: dict[str, float], cache: dict) -> float:
@@ -61,7 +62,7 @@ def suggest(body: SuggestIn, db: Session = Depends(get_db)):
     Para pacientes prioritarios el modelo decide ademas CUANTA prioridad otorgar: parte de la
     bonificacion minima y la sube de a 5 min hasta cumplir la meta de espera (o llegar al tope).
     """
-    cache: dict = {}
+    cache: dict = {"_hour": body.hour}
     options: list[Option] = []
     for p in body.points:
         if not p.active or body.service not in p.services:
@@ -93,7 +94,7 @@ def suggest(body: SuggestIn, db: Session = Depends(get_db)):
 
 @router.post("/estimate", response_model=EstimateOut)
 def estimate(body: EstimateIn, db: Session = Depends(get_db)):
-    cache: dict = {}
+    cache: dict = {"_hour": body.hour}
     p = body.point
     wait = _remaining(db, p, body.prior_minutes, cache)
     waits: dict[int, float] = {}
@@ -109,14 +110,14 @@ def estimate(body: EstimateIn, db: Session = Depends(get_db)):
 
 @router.post("/learn", status_code=204)
 def learn(body: LearnIn, db: Session = Depends(get_db)):
-    estimator.learn(db, body.service, str(body.point_id), body.preferential, body.minutes, body.prior_minutes)
+    estimator.learn(db, body.service, str(body.point_id), body.preferential, body.minutes, body.prior_minutes, body.hour)
 
 
 @router.post("/predict", response_model=PredictOut)
 def predict(body: PredictIn, db: Session = Depends(get_db)):
     """Responde una consulta puntual: cuanto tardara una atencion y como se llego a esa cifra."""
     table = estimator.load_table(db, body.service)
-    ex = estimator.explain(table, str(body.point_id), body.preferential, body.prior_minutes)
+    ex = estimator.explain(table, str(body.point_id), body.preferential, body.prior_minutes, body.service, body.hour)
     recent = db.execute(
         select(TrainingLog.abs_error).where(TrainingLog.service == body.service).order_by(TrainingLog.id.desc()).limit(30)
     ).scalars().all()
@@ -128,6 +129,12 @@ def predict(body: PredictIn, db: Session = Depends(get_db)):
         low=round(max(ex["minutes"] - margin, 0.5), 1), high=round(ex["minutes"] + margin, 1),
         samples=ex["samples"], confidence_pct=round(ex["confidence"] * 100), levels=ex["levels"],
     )
+
+
+@router.post("/model/retrain")
+def model_retrain(db: Session = Depends(get_db)):
+    """Reentrena scikit-learn ahora con las atenciones guardadas."""
+    return {**sk_model.train(db), "estimator": sk_model.info()}
 
 
 @router.post("/model/report")

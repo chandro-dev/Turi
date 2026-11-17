@@ -13,10 +13,11 @@ Idea (intencionalmente simple y explicable):
 """
 from __future__ import annotations
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from .entities import Stat, TrainingLog
+from . import sk_model
+from .entities import Attention, Stat, TrainingLog
 
 K = 3.0
 CAP = 50
@@ -45,7 +46,7 @@ def _chain(point_id: str, g: str):
     )
 
 
-def estimate(table: Table, point_id: str, preferential: bool, prior: float) -> float:
+def estimate_ema(table: Table, point_id: str, preferential: bool, prior: float) -> float:
     est = float(prior)
     for p, g, _ in _chain(point_id, group_of(preferential)):
         row = table.get((p, g))
@@ -55,7 +56,17 @@ def estimate(table: Table, point_id: str, preferential: bool, prior: float) -> f
     return est
 
 
-def explain(table: Table, point_id: str, preferential: bool, prior: float) -> dict:
+def estimate(table: Table, point_id: str, preferential: bool, prior: float,
+             service: str | None = None, hour: int | None = None) -> float:
+    """Estimacion final: EMA, mezclada con scikit-learn cuando este entrenado (modo hybrid)."""
+    ema = estimate_ema(table, point_id, preferential, prior)
+    if service is None:
+        return ema
+    return sk_model.blend(ema, sk_model.predict(service, point_id, group_of(preferential), hour))
+
+
+def explain(table: Table, point_id: str, preferential: bool, prior: float,
+            service: str | None = None, hour: int | None = None) -> dict:
     """Desglose paso a paso de la estimacion, para mostrar al supervisor como se llego al numero."""
     est = float(prior)
     levels = [{"label": "Valor inicial del servicio", "samples": 0, "mean": round(prior, 2), "estimate": round(est, 2)}]
@@ -67,10 +78,17 @@ def explain(table: Table, point_id: str, preferential: bool, prior: float) -> di
             est = (n * mean + K * est) / (n + K)
             levels.append({"label": label, "samples": n, "mean": round(mean, 2), "estimate": round(est, 2)})
             samples = n
+    sk = sk_model.predict(service, point_id, group_of(preferential), hour) if service else None
+    if sk is not None:
+        final = sk_model.blend(est, sk)
+        levels.append({"label": f"Ajuste con scikit-learn (peso {sk_model.weight() * 100:.0f}%, franja horaria)",
+                       "samples": sk_model.info()["trained_samples"], "mean": round(sk, 2), "estimate": round(final, 2)})
+        est = final
     return {"minutes": est, "levels": levels, "samples": samples, "confidence": samples / (samples + K) if samples else 0.0}
 
 
-def learn(db: Session, service: str, point_id: str, preferential: bool, minutes: float, prior: float | None = None) -> None:
+def learn(db: Session, service: str, point_id: str, preferential: bool, minutes: float, prior: float | None = None,
+          hour: int | None = None) -> None:
     minutes = min(max(minutes, MIN_MINUTES), MAX_MINUTES)
     g = group_of(preferential)
 
@@ -78,13 +96,16 @@ def learn(db: Session, service: str, point_id: str, preferential: bool, minutes:
     table = load_table(db, service)
     base = prior if prior is not None else (table[("*", "*")][1] if ("*", "*") in table else None)
     if base is not None:
-        predicted = estimate(table, point_id, preferential, base)
+        ema = estimate_ema(table, point_id, preferential, base)
+        sk = sk_model.predict(service, point_id, g, hour)
+        predicted = sk_model.blend(ema, sk)
         n_before = table.get((point_id, g), (0, 0.0))[0]
         db.add(TrainingLog(
             service=service, point_id=point_id, grp=g, predicted=predicted, actual=minutes, prior=prior,
             abs_error=abs(predicted - minutes), prior_error=abs(prior - minutes) if prior is not None else None,
-            n_before=n_before,
+            n_before=n_before, pred_ema=ema, pred_sk=sk,
         ))
+    db.add(Attention(service=service, point_id=point_id, grp=g, hour=hour, minutes=minutes))
 
     # 2) aprendizaje
     for p, grp in ((point_id, g), (point_id, "*"), ("*", g), ("*", "*")):
@@ -100,6 +121,12 @@ def learn(db: Session, service: str, point_id: str, preferential: bool, minutes:
         else:
             row.mean = row.mean + (minutes - row.mean) / min(row.n, CAP)
     db.commit()
+
+    # reentrenamiento periodico de scikit-learn
+    if sk_model.enabled():
+        total = db.execute(select(func.count(Attention.id))).scalar_one()
+        if total >= sk_model.MIN_TRAIN and total % sk_model.RETRAIN_EVERY == 0:
+            sk_model.train(db)
 
 
 # ---------------------------------------------------------------- reporte de efectividad
@@ -171,6 +198,22 @@ def report(db: Session, priors: dict[str, float]) -> dict:
         "verdict": {"level": verdict[0], "text": verdict[1]},
         "curve": curve, "curve_window": window, "by_service": by_service, "cells": cells,
         "mature_samples": MATURE_SAMPLES,
+        "estimator": sk_model.info(),
+        "comparison": _comparison(logs),
+        "attentions_stored": db.execute(select(func.count(Attention.id))).scalar_one(),
+    }
+
+
+def _comparison(logs) -> dict:
+    """Compara EMA, scikit-learn y la mezcla sobre las atenciones en que scikit-learn ya estaba entrenado."""
+    both = [r for r in logs if r.pred_sk is not None and r.pred_ema is not None]
+    if not both:
+        return {"n": 0, "mae_ema": None, "mae_sklearn": None, "mae_active": None}
+    return {
+        "n": len(both),
+        "mae_ema": _r(_avg([abs(r.pred_ema - r.actual) for r in both])),
+        "mae_sklearn": _r(_avg([abs(r.pred_sk - r.actual) for r in both])),
+        "mae_active": _r(_avg([r.abs_error for r in both])),
     }
 
 

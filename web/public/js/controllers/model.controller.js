@@ -1,5 +1,5 @@
 /* CONTROLADOR: prueba del modelo de IA (supervisor). */
-import { $, $$, guard } from '../core/dom.js';
+import { $, $$, guard, toast } from '../core/dom.js';
 import { poll } from '../core/timers.js';
 import { repo } from '../models/repository.js';
 import { answerView, modelShell, reportView } from '../views/model.view.js';
@@ -11,7 +11,18 @@ export async function modelController() {
   mountShell(modelShell(services), '#/modelo');
   let preferential = false;
 
-  const load = guard(async () => { $('#mreport').innerHTML = reportView(await repo.modelReport()); });
+  const load = guard(async () => {
+    $('#mreport').innerHTML = reportView(await repo.modelReport());
+    const rt = $('#retrain');
+    if (rt) {
+      rt.onclick = guard(async () => {
+        rt.disabled = true;
+        const r = await repo.modelRetrain();
+        toast(r.trained ? `scikit-learn reentrenado con ${r.samples} atenciones` : `No se pudo entrenar: ${r.reason || 'faltan datos'}`, r.trained ? 'ok' : 'error');
+        load();
+      });
+    }
+  });
   $('#refresh').onclick = load;
   poll(load, 10000);
 

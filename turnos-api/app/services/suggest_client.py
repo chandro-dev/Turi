@@ -86,7 +86,7 @@ def suggest_points(db: Session, service: Service, priority_class: str) -> tuple[
     body = {
         "service": service.code, "preferential": pref, "base_key": base_key,
         "bonus_min": bonus, "max_bonus_min": PRIORITY_MAX_BONUS_MIN if pref else 0.0,
-        "target_wait_min": PRIORITY_TARGET_WAIT_MIN if pref else None,
+        "target_wait_min": PRIORITY_TARGET_WAIT_MIN if pref else None, "hour": availability.local_now().hour,
         "prior_minutes": prior, "points": points,
     }
     try:
@@ -108,7 +108,7 @@ def estimate_point(db: Session, p: Point) -> dict[int, dict]:
     prior = priors(db)
     waits: dict[int, float] = {}
     try:
-        r = httpx.post(f"{SUGGEST_URL}/estimate", json={"prior_minutes": prior, "point": payload}, timeout=TIMEOUT)
+        r = httpx.post(f"{SUGGEST_URL}/estimate", json={"prior_minutes": prior, "point": payload, "hour": availability.local_now().hour}, timeout=TIMEOUT)
         r.raise_for_status()
         waits = {int(k): v for k, v in r.json()["waits"].items()}
     except Exception as e:  # noqa: BLE001
@@ -133,12 +133,13 @@ def policy() -> dict:
             "max_bonus_min": PRIORITY_MAX_BONUS_MIN}
 
 
-def learn(service_code: str, point_id: int, preferential: bool, minutes: float, prior: float | None = None) -> None:
+def learn(service_code: str, point_id: int, preferential: bool, minutes: float, prior: float | None = None,
+          hour: int | None = None) -> None:
     try:
         httpx.post(
             f"{SUGGEST_URL}/learn",
             json={"service": service_code, "point_id": point_id, "preferential": preferential, "minutes": minutes,
-                  "prior_minutes": prior},
+                  "prior_minutes": prior, "hour": hour},
             timeout=TIMEOUT,
         ).raise_for_status()
     except Exception as e:  # noqa: BLE001

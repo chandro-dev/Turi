@@ -47,8 +47,8 @@ def current_user(authorization: str | None = Header(default=None), db: Session =
     except jwt.PyJWTError:
         raise HTTPException(401, "Sesion invalida o expirada")
     user = db.get(User, int(data["sub"]))
-    if not user:
-        raise HTTPException(401, "Usuario no existe")
+    if not user or not user.active:
+        raise HTTPException(401, "Usuario no existe o esta desactivado")
     return user
 
 

@@ -61,3 +61,37 @@ def test_next_shift_finds_upcoming_slot():
 def test_overlaps():
     assert av.overlaps(time(7), time(13), time(12), time(15))
     assert not av.overlaps(time(7), time(13), time(13), time(15))
+
+
+# ---- turnos que cruzan la medianoche
+NIGHT = dict(days=(0,), start=time(22, 0), end=time(6, 0))          # lunes 22:00 -> martes 06:00
+MON_23 = datetime(2026, 11, 16, 23, 0)
+TUE_3 = datetime(2026, 11, 17, 3, 0)
+TUE_7 = datetime(2026, 11, 17, 7, 0)
+MON_3 = datetime(2026, 11, 16, 3, 0)
+
+
+def test_overnight_shift_covers_night_and_early_morning_of_next_day():
+    s = shift(**NIGHT)
+    assert av.covers(s, MON_23)        # parte nocturna (lunes)
+    assert av.covers(s, TUE_3)         # madrugada (martes)
+    assert not av.covers(s, TUE_7)     # ya termino
+    assert not av.covers(s, MON_3)     # lunes de madrugada pertenece al domingo, que no trabaja
+
+
+def test_overnight_on_sunday_wraps_to_monday():
+    s = shift(days=(6,), start=time(22, 0), end=time(6, 0))
+    assert av.covers(s, datetime(2026, 11, 22, 23, 0))   # domingo noche
+    assert av.covers(s, datetime(2026, 11, 23, 2, 0))    # lunes madrugada
+    assert not av.covers(s, datetime(2026, 11, 23, 7, 0))
+
+
+def test_shifts_overlap_across_midnight():
+    # lunes 22-06 (hasta martes 6) cruza con martes 05-09, pero no con martes 06-09
+    assert av.shifts_overlap([0], time(22), time(6), [1], time(5), time(9))
+    assert not av.shifts_overlap([0], time(22), time(6), [1], time(6), time(9))
+    # domingo 22-06 cruza con lunes 04-08 (cruce de semana)
+    assert av.shifts_overlap([6], time(22), time(6), [0], time(4), time(8))
+    # mismo horario, dias distintos y sin cruce de medianoche: no se cruzan
+    assert not av.shifts_overlap([0], time(7), time(13), [1], time(7), time(13))
+    assert av.shifts_overlap([0, 1], time(7), time(13), [1], time(12), time(14))

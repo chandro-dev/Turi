@@ -17,6 +17,11 @@ def report(db: Session = Depends(get_db), _: User = Depends(SUPERVISOR)):
     return model_service.report(db)
 
 
+@router.post("/retrain")
+def retrain(_: User = Depends(SUPERVISOR)):
+    return model_service.retrain()
+
+
 @router.post("/predict")
 def predict(body: ModelPredictIn, db: Session = Depends(get_db), _: User = Depends(SUPERVISOR)):
     return model_service.predict(db, body.service_code, body.preferential, body.point_id)

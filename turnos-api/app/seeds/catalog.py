@@ -58,3 +58,17 @@ def seed_users(db: Session) -> None:
             )
         )
     db.commit()
+
+
+def ensure_bootstrap_admin(db: Session) -> str | None:
+    """Crea el supervisor inicial definido por entorno si aun no existe. Devuelve su usuario si lo creo."""
+    from ..core.config import BOOTSTRAP_ADMIN_NAME, BOOTSTRAP_ADMIN_PASSWORD, BOOTSTRAP_ADMIN_USER
+
+    if not BOOTSTRAP_ADMIN_USER or len(BOOTSTRAP_ADMIN_PASSWORD) < 8:
+        return None
+    if db.execute(select(User).where(User.username == BOOTSTRAP_ADMIN_USER)).scalar_one_or_none():
+        return None
+    db.add(User(username=BOOTSTRAP_ADMIN_USER, name=BOOTSTRAP_ADMIN_NAME, role="SUPERVISOR",
+                password_hash=hash_password(BOOTSTRAP_ADMIN_PASSWORD), active=True))
+    db.commit()
+    return BOOTSTRAP_ADMIN_USER

@@ -95,7 +95,18 @@ Lectura:
 
 En una Raspberry Pi de 4 GB que ya aloja otros servicios, ≈ 100 MB de RAM y ≈ 270 MB de imagen adicionales son asumibles, pero no gratuitos.
 
-## 4. Conclusión y recomendación
+## 3.5 Decisión tomada: modo híbrido (implementado)
+
+Aunque en datos sintéticos la ganancia fue modesta, se **implementó scikit-learn de forma segura** (`suggestion-service/app/models/sk_model.py`), de modo que el supervisor pueda comprobar con datos reales si aporta:
+
+- **Qué aprende:** una regresión Ridge sobre el logaritmo de la duración, con servicio, punto, tipo de paciente y **franja horaria** (bloques de 4 h). Después de entrenar se precalcula una tabla de predicciones, por lo que consultar cuesta O(1) y no milisegundos por turno.
+- **Cómo se combina:** `estimación = (1 − w)·EMA + w·scikit-learn`, con `w = min(0,6, 0,6·muestras/200)`. Mientras no haya modelo entrenado se usa solo el EMA.
+- **Datos:** cada atención finalizada se guarda en la tabla `attentions` (con su hora). Se entrena sola al llegar a 40 atenciones y se reentrena cada 25; también al arrancar y con el botón "Reentrenar ahora".
+- **Seguridad operativa:** si scikit-learn no está instalado o falla, el servicio sigue con EMA. `ESTIMATOR=ema` lo desactiva.
+- **Evidencia:** la pantalla "Prueba del modelo" compara, sobre las mismas atenciones, el error del EMA, de scikit-learn y de la mezcla activa.
+- **Costo asumido:** ≈ +270 MB de imagen y ≈ +100 MB de RAM en `suggestion-service`.
+
+## 4. Conclusión y recomendación (estudio original)
 
 1. **Mantener el EMA como modelo por defecto.** Aprende desde la primera muestra, es explicable y barato.
 2. **scikit-learn es viable** cuando haya motivo. Se recomienda evaluarlo cuando se cumplan **ambas** condiciones:

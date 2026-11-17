@@ -83,15 +83,31 @@ class PointPatchIn(BaseModel):
     enabled: bool | None = None
 
 
-class StaffCreateIn(BaseModel):
+class UserCreateIn(BaseModel):
     name: str = Field(min_length=2, max_length=120)
     username: str = Field(min_length=3, max_length=40)
     password: str = Field(min_length=6, max_length=100)
+    role: str = Field(pattern=r"^(RECEPCION|MEDICO|SUPERVISOR)$")
 
 
-class StaffPatchIn(BaseModel):
+class UserPatchIn(BaseModel):
     name: str | None = Field(default=None, min_length=2, max_length=120)
     password: str | None = Field(default=None, min_length=6, max_length=100)
+    role: str | None = Field(default=None, pattern=r"^(RECEPCION|MEDICO|SUPERVISOR)$")
+    active: bool | None = None
+
+
+class ServiceCreateIn(BaseModel):
+    code: str = Field(min_length=2, max_length=8)
+    name: str = Field(min_length=2, max_length=80)
+    prior_minutes: float = Field(ge=1, le=240)
+    color: str = Field(default="#0d9488", pattern=r"^#[0-9a-fA-F]{6}$")
+
+
+class ServicePatchIn(BaseModel):
+    name: str | None = Field(default=None, min_length=2, max_length=80)
+    prior_minutes: float | None = Field(default=None, ge=1, le=240)
+    color: str | None = Field(default=None, pattern=r"^#[0-9a-fA-F]{6}$")
 
 
 class ShiftIn(BaseModel):

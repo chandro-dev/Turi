@@ -1,5 +1,6 @@
 /* Arranque: router por hash + control de acceso por rol. */
 import { $ } from './core/dom.js';
+import { connectLive } from './core/live.js';
 import { clearTimers } from './core/timers.js';
 import { HOME } from './models/constants.js';
 import { setUnauthorizedHandler } from './models/api.js';
@@ -41,6 +42,7 @@ async function route() {
   entry[1]();
 }
 
+connectLive();
 setUnauthorizedHandler(logout);
 window.addEventListener('hashchange', route);
 route();

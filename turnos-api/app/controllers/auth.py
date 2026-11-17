@@ -18,6 +18,8 @@ def login(body: LoginIn, db: Session = Depends(get_db)):
     u = db.execute(select(User).where(User.username == body.username.strip().lower())).scalar_one_or_none()
     if not u or not verify_password(body.password, u.password_hash):
         raise HTTPException(401, "Usuario o contrasena incorrectos")
+    if not u.active:
+        raise HTTPException(403, "Tu usuario esta desactivado. Contacta a supervision")
     return {"token": make_token(u), "user": presenters.user(u, availability.user_point(db, u))}
 
 

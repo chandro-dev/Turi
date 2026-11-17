@@ -44,6 +44,18 @@ Se cargan solos al iniciar con `SEED_DEMO=true` y sin turnos. Para agregar otro 
 docker compose exec turnos-api python -m app.seeds.demo_data
 ```
 
+## Variables de entorno principales
+
+| Variable | Uso |
+|---|---|
+| `SEED_DEMO` | `true`: cuentas y datos de demostración. `false`: uso real (sin accesos de demo en el login) |
+| `BOOTSTRAP_ADMIN_USER` / `BOOTSTRAP_ADMIN_PASSWORD` | Crea el primer supervisor si no existe (clave de 8+ caracteres) |
+| `ESTIMATOR` | `hybrid` (EMA + scikit-learn, por defecto) o `ema` |
+| `PRIORITY_TARGET_WAIT_MIN`, `PRIORITY_BASE_BONUS_MIN`, `PRIORITY_MAX_BONUS_MIN` | Política de atención prioritaria |
+
+Pasar un despliegue a uso real: define `BOOTSTRAP_ADMIN_*` y `SEED_DEMO=false`, reinicia, entra con ese administrador y retira las cuentas de demo con
+`docker compose exec turnos-api python -m app.seeds.demo_users purge`.
+
 ## Pruebas
 
 ```bash
@@ -53,6 +65,8 @@ python scripts/e2e.py http://localhost:8080      # extremo a extremo (requiere e
 ```
 
 ## Despliegue en servidor con Caddy
+
+Con el script (copia el código por SSH, reconstruye y verifica): `scripts/deploy-pi.sh usuario@host /ruta/del/proyecto`. O manualmente:
 
 ```bash
 docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build

@@ -3,6 +3,7 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from ..core.config import SEED_DEMO
 from ..core.database import get_db
 from ..services import report_service
 from ..views import presenters
@@ -25,3 +26,9 @@ def display(db: Session = Depends(get_db)):
 def lookup(q: str = Query(min_length=3, max_length=30), db: Session = Depends(get_db)):
     t, est = report_service.lookup(db, q)
     return presenters.turn(t, est, public=True)
+
+
+@router.get("/config")
+def config():
+    """Configuracion publica para el cliente: muestra o no los accesos de demostracion."""
+    return {"demo": SEED_DEMO}

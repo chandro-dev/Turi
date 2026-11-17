@@ -9,7 +9,7 @@ export const DEMOS = [
   ['supervisor', 'supervisor123', 'Supervision', 'Indicadores', 'chart'],
 ];
 
-export const loginView = () => `
+export const loginView = (demo = true) => `
   <div class="login-wrap">
     <section class="login-art"><div class="blob a"></div><div class="blob b"></div><div class="blob c"></div>
       ${BRAND}
@@ -30,8 +30,8 @@ export const loginView = () => `
         <button class="btn big" style="width:100%" id="go">Entrar</button>
         <p class="err" id="err"></p>
       </form>
-      <div class="demo-title">Acceso rapido demo</div>
-      <div class="demo-users">${DEMOS.map((d, i) => `<button type="button" data-i="${i}"><div class="avatar sm" style="--av:linear-gradient(135deg,#14b8a6,#0ea5e9)">${ic(d[4], 'sm')}</div><div><b>${d[2]}</b><span>${d[3]}</span></div></button>`).join('')}</div>
+      ${demo ? `<div class="demo-title">Acceso rapido demo</div>
+      <div class="demo-users">${DEMOS.map((d, i) => `<button type="button" data-i="${i}"><div class="avatar sm" style="--av:linear-gradient(135deg,#14b8a6,#0ea5e9)">${ic(d[4], 'sm')}</div><div><b>${d[2]}</b><span>${d[3]}</span></div></button>`).join('')}</div>` : ''}
       <div class="public-links"><a href="#/pantalla">${ic('monitor', 'sm')} Pantalla</a><a href="#/consulta">${ic('search', 'sm')} Consultar turno</a></div>
     </div></section>
   </div>`;

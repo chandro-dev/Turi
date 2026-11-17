@@ -4,6 +4,7 @@ from __future__ import annotations
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from ..core.config import TZ
 from ..models import (
     ACTIVE_STATUSES,
     BAJA,
@@ -266,5 +267,6 @@ def finish(db: Session, user: User, turn_id: int) -> Turn:
     queueing.add_event(db, t, "FINISHED", f"{minutes:.1f} min", user.username)
     db.commit()
     suggest_client.learn(t.service.code, t.point_id, t.priority_class == PREFERENCIAL, minutes,
-                         suggest_client.priors(db).get(t.service.code))  # alimenta la IA
+                         suggest_client.priors(db).get(t.service.code),
+                         t.started_at.astimezone(TZ).hour)  # alimenta la IA (con la franja horaria)
     return t

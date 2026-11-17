@@ -22,6 +22,7 @@ services:
     restart: unless-stopped
     environment:
       DATABASE_URL: postgresql+psycopg2://turi:${POSTGRES_PASSWORD:-turi_dev_password}@db:5432/turi_suggest
+      ESTIMATOR: ${ESTIMATOR:-hybrid}   # ema | hybrid (EMA + scikit-learn)
     depends_on:
       db:
         condition: service_healthy
@@ -39,6 +40,11 @@ services:
       SUGGEST_URL: http://suggestion-service:8001
       JWT_SECRET: ${JWT_SECRET:-dev-secret-change-me}
       SEED_DEMO: ${SEED_DEMO:-true}
+      BOOTSTRAP_ADMIN_USER: ${BOOTSTRAP_ADMIN_USER:-}
+      BOOTSTRAP_ADMIN_PASSWORD: ${BOOTSTRAP_ADMIN_PASSWORD:-}
+      PRIORITY_TARGET_WAIT_MIN: ${PRIORITY_TARGET_WAIT_MIN:-10}
+      PRIORITY_BASE_BONUS_MIN: ${PRIORITY_BASE_BONUS_MIN:-20}
+      PRIORITY_MAX_BONUS_MIN: ${PRIORITY_MAX_BONUS_MIN:-60}
       APP_TZ: America/Bogota
     depends_on:
       db:

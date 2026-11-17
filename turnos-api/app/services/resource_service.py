@@ -1,4 +1,4 @@
-"""Administracion de recursos (supervisor): puntos de atencion, personal y turnos de trabajo."""
+"""Administracion de recursos (supervisor): servicios, puntos de atencion, usuarios y turnos de trabajo."""
 from __future__ import annotations
 
 import re
@@ -9,13 +9,15 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ..core.security import hash_password
-from ..models import ACTIVE_STATUSES, Point, Service, Shift, Turn, User
+from ..models import ACTIVE_STATUSES, Point, Service, Shift, Turn, User, point_services
 from . import availability, queueing
 from .errors import Conflict, DomainError, NotFound
 
 USERNAME_RE = re.compile(r"^[a-z0-9._-]{3,40}$")
+CODE_RE = re.compile(r"^[A-Z0-9]{2,8}$")
+COLOR_RE = re.compile(r"^#[0-9a-fA-F]{6}$")
 MIN_PASSWORD = 6
-STAFF_ROLE = "MEDICO"
+ROLES = ("RECEPCION", "MEDICO", "SUPERVISOR")
 
 
 # ------------------------------------------------------------------ consultas
@@ -39,15 +41,76 @@ def list_points(db: Session) -> list[dict]:
     return out
 
 
-def list_staff(db: Session) -> list[dict]:
+def list_users(db: Session) -> list[dict]:
     shifts = availability.load_shifts(db)
     now = availability.local_now()
-    users = db.execute(select(User).where(User.role == STAFF_ROLE).order_by(User.name)).scalars().all()
+    users = db.execute(select(User).order_by(User.role, User.name)).scalars().all()
     return [{
         "user": u, "shifts": [s for s in shifts if s.user_id == u.id],
-        "current_point": availability.user_point(db, u, shifts, now),
-        "next_shift": availability.next_shift(u, shifts, now),
+        "current_point": availability.user_point(db, u, shifts, now) if u.role == "MEDICO" else None,
+        "next_shift": availability.next_shift(u, shifts, now) if u.role == "MEDICO" else None,
     } for u in users]
+
+
+# ------------------------------------------------------------------ servicios
+def _get_service(db: Session, service_id: int) -> Service:
+    s = db.get(Service, service_id)
+    if not s:
+        raise NotFound("Servicio no existe")
+    return s
+
+
+def _check_service_fields(name: str | None, prior: float | None, color: str | None) -> None:
+    if name is not None and len(name.strip()) < 2:
+        raise DomainError("El nombre del servicio es muy corto", 422)
+    if prior is not None and not 1 <= prior <= 240:
+        raise DomainError("La duracion inicial debe estar entre 1 y 240 minutos", 422)
+    if color is not None and not COLOR_RE.match(color):
+        raise DomainError("Color invalido: usa el formato #RRGGBB", 422)
+
+
+def create_service(db: Session, code: str, name: str, prior_minutes: float, color: str) -> Service:
+    code = code.strip().upper()
+    if not CODE_RE.match(code):
+        raise DomainError("Codigo invalido: usa de 2 a 8 letras mayusculas o numeros (ej. RX)", 422)
+    _check_service_fields(name, prior_minutes, color)
+    if db.execute(select(Service).where(Service.code == code)).scalar_one_or_none():
+        raise Conflict(f"Ya existe un servicio con el codigo {code}")
+    if db.execute(select(Service).where(Service.name == name.strip())).scalar_one_or_none():
+        raise Conflict(f"Ya existe un servicio llamado '{name.strip()}'")
+    s = Service(code=code, name=name.strip(), prior_minutes=prior_minutes, color=color)
+    db.add(s)
+    db.commit()
+    db.refresh(s)
+    return s
+
+
+def update_service(db: Session, service_id: int, changes: dict) -> Service:
+    s = _get_service(db, service_id)
+    _check_service_fields(changes.get("name"), changes.get("prior_minutes"), changes.get("color"))
+    if "name" in changes:
+        other = db.execute(select(Service).where(Service.name == changes["name"].strip())).scalar_one_or_none()
+        if other and other.id != s.id:
+            raise Conflict(f"Ya existe un servicio llamado '{changes['name'].strip()}'")
+        s.name = changes["name"].strip()
+    if "prior_minutes" in changes:
+        s.prior_minutes = changes["prior_minutes"]
+    if "color" in changes:
+        s.color = changes["color"]
+    db.commit()
+    db.refresh(s)
+    return s
+
+
+def delete_service(db: Session, service_id: int) -> None:
+    s = _get_service(db, service_id)
+    if db.execute(select(Turn.id).where(Turn.service_id == s.id).limit(1)).first():
+        raise Conflict("El servicio tiene historial de turnos y no se puede eliminar")
+    in_use = db.execute(select(point_services.c.point_id).where(point_services.c.service_id == s.id).limit(1)).first()
+    if in_use:
+        raise Conflict("Hay puntos que atienden este servicio: quitaselo primero")
+    db.delete(s)
+    db.commit()
 
 
 # ------------------------------------------------------------------ puntos
@@ -125,11 +188,11 @@ def delete_point(db: Session, point_id: int) -> None:
     db.commit()
 
 
-# ------------------------------------------------------------------ personal
-def _get_staff(db: Session, user_id: int) -> User:
+# ------------------------------------------------------------------ usuarios
+def _get_user(db: Session, user_id: int) -> User:
     u = db.get(User, user_id)
-    if not u or u.role != STAFF_ROLE:
-        raise NotFound("Funcionario no existe")
+    if not u:
+        raise NotFound("Usuario no existe")
     return u
 
 
@@ -138,8 +201,15 @@ def _check_password(pw: str) -> None:
         raise DomainError(f"La contrasena debe tener al menos {MIN_PASSWORD} caracteres", 422)
 
 
-def create_staff(db: Session, name: str, username: str, password: str) -> User:
+def _active_supervisors(db: Session, exclude_id: int | None = None) -> int:
+    rows = db.execute(select(User).where(User.role == "SUPERVISOR", User.active.is_(True))).scalars().all()
+    return len([u for u in rows if u.id != exclude_id])
+
+
+def create_user(db: Session, name: str, username: str, password: str, role: str) -> User:
     username = username.strip().lower()
+    if role not in ROLES:
+        raise DomainError("Rol invalido", 422)
     if not USERNAME_RE.match(username):
         raise DomainError("Usuario invalido: usa 3 a 40 letras minusculas, numeros, punto, guion o guion bajo", 422)
     if len(name.strip()) < 2:
@@ -147,27 +217,48 @@ def create_staff(db: Session, name: str, username: str, password: str) -> User:
     _check_password(password)
     if db.execute(select(User).where(User.username == username)).scalar_one_or_none():
         raise Conflict(f"El usuario '{username}' ya existe")
-    u = User(username=username, name=name.strip(), role=STAFF_ROLE, password_hash=hash_password(password), point_id=None)
+    u = User(username=username, name=name.strip(), role=role, password_hash=hash_password(password), point_id=None, active=True)
     db.add(u)
     db.commit()
     db.refresh(u)
     return u
 
 
-def update_staff(db: Session, user_id: int, changes: dict) -> User:
-    u = _get_staff(db, user_id)
+def update_user(db: Session, actor: User, user_id: int, changes: dict) -> User:
+    u = _get_user(db, user_id)
     if changes.get("name"):
         u.name = changes["name"].strip()
     if changes.get("password"):
         _check_password(changes["password"])
         u.password_hash = hash_password(changes["password"])
+    if "role" in changes and changes["role"] != u.role:
+        if changes["role"] not in ROLES:
+            raise DomainError("Rol invalido", 422)
+        if u.id == actor.id:
+            raise Conflict("No puedes cambiar tu propio rol")
+        if u.role == "SUPERVISOR" and _active_supervisors(db, u.id) == 0:
+            raise Conflict("Debe quedar al menos un supervisor activo")
+        if changes["role"] != "MEDICO":  # los horarios solo existen para personal de atencion
+            db.execute(Shift.__table__.delete().where(Shift.user_id == u.id))
+        u.role = changes["role"]
+    if "active" in changes and changes["active"] != u.active:
+        if changes["active"] is False:
+            if u.id == actor.id:
+                raise Conflict("No puedes desactivar tu propio usuario")
+            if u.role == "SUPERVISOR" and _active_supervisors(db, u.id) == 0:
+                raise Conflict("Debe quedar al menos un supervisor activo")
+        u.active = changes["active"]
     db.commit()
     return u
 
 
-def delete_staff(db: Session, user_id: int) -> None:
-    u = _get_staff(db, user_id)
-    pt = availability.user_point(db, u)
+def delete_user(db: Session, actor: User, user_id: int) -> None:
+    u = _get_user(db, user_id)
+    if u.id == actor.id:
+        raise Conflict("No puedes eliminar tu propio usuario")
+    if u.role == "SUPERVISOR" and _active_supervisors(db, u.id) == 0:
+        raise Conflict("Debe quedar al menos un supervisor activo")
+    pt = availability.user_point(db, u) if u.role == "MEDICO" else None
     if pt and queueing.current_turn(db, pt.id):
         raise Conflict("El funcionario tiene un paciente en atencion en este momento")
     db.execute(Shift.__table__.delete().where(Shift.user_id == u.id))
@@ -177,15 +268,17 @@ def delete_staff(db: Session, user_id: int) -> None:
 
 # ------------------------------------------------------------------ turnos de trabajo
 def create_shift(db: Session, user_id: int, point_id: int, weekdays: list[int], start: time, end: time) -> Shift:
-    u = _get_staff(db, user_id)
+    u = _get_user(db, user_id)
+    if u.role != "MEDICO":
+        raise DomainError("Solo el personal de atencion tiene horarios de trabajo", 422)
     p = _get_point(db, point_id)
     days = sorted(set(weekdays))
     if not days or any(d < 0 or d > 6 for d in days):
         raise DomainError("Selecciona al menos un dia de la semana", 422)
-    if end <= start:
-        raise DomainError("La hora de fin debe ser posterior a la de inicio", 422)
+    if end == start:
+        raise DomainError("La hora de inicio y la de fin no pueden ser iguales", 422)
     for s in availability.load_shifts(db):
-        if not set(s.days) & set(days) or not availability.overlaps(start, end, s.start_time, s.end_time):
+        if not availability.shifts_overlap(days, start, end, s.days, s.start_time, s.end_time):
             continue
         if s.user_id == u.id:
             raise Conflict(f"{u.name} ya tiene un turno que se cruza ({s.point.name}, {s.start_time:%H:%M}-{s.end_time:%H:%M})")

@@ -12,3 +12,8 @@ TZ = ZoneInfo(os.getenv("APP_TZ", "America/Bogota"))
 PRIORITY_TARGET_WAIT_MIN = float(os.getenv("PRIORITY_TARGET_WAIT_MIN", "10"))   # meta de espera para prioritarios
 PRIORITY_BASE_BONUS_MIN = float(os.getenv("PRIORITY_BASE_BONUS_MIN", "20"))     # adelanto minimo
 PRIORITY_MAX_BONUS_MIN = float(os.getenv("PRIORITY_MAX_BONUS_MIN", "60"))       # tope de adelanto
+
+# Administrador inicial: se crea al arrancar si no existe (para instalaciones sin usuarios de demostracion)
+BOOTSTRAP_ADMIN_USER = os.getenv("BOOTSTRAP_ADMIN_USER", "").strip().lower()
+BOOTSTRAP_ADMIN_PASSWORD = os.getenv("BOOTSTRAP_ADMIN_PASSWORD", "")
+BOOTSTRAP_ADMIN_NAME = os.getenv("BOOTSTRAP_ADMIN_NAME", "Administrador")

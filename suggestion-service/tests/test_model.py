@@ -16,6 +16,9 @@ def clean_db():
 
     Base.metadata.drop_all(engine)
     Base.metadata.create_all(engine)
+    from app.models import sk_model
+
+    sk_model.reset()
 
 PRIOR = {"CG": 10.0}
 

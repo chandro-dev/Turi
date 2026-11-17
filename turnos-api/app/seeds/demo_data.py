@@ -9,6 +9,7 @@ from datetime import timedelta
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from ..core.config import TZ
 from ..services import priority, queueing, suggest_client
 from ..models import (
     CANCELLED,
@@ -84,7 +85,7 @@ def seed_history(db: Session, force: bool = False, seed: int = 42) -> str:
         t.called_at = created + timedelta(minutes=rng.uniform(2, 25))
         t.started_at = t.called_at + timedelta(seconds=rng.randint(20, 90))
         t.finished_at = t.started_at + timedelta(minutes=dur)
-        learned.append((s.code, p.id, t.priority_class == PREFERENCIAL, dur))
+        learned.append((s.code, p.id, t.priority_class == PREFERENCIAL, dur, created.astimezone(TZ).hour))
 
     # 2) Cancelados y no presentados
     for status in (CANCELLED, CANCELLED, NO_SHOW, NO_SHOW):
@@ -107,8 +108,8 @@ def seed_history(db: Session, force: bool = False, seed: int = 42) -> str:
 
     db.commit()
     priors = suggest_client.priors(db)
-    for code, pid, pref, dur in learned:
-        suggest_client.learn(code, pid, pref, dur, priors.get(code))
+    for code, pid, pref, dur, hour in learned:
+        suggest_client.learn(code, pid, pref, dur, priors.get(code), hour)
     return f"{len(learned)} atendidos, 4 cancelados/no presentados, 14 en espera"
 
 

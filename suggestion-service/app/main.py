@@ -3,12 +3,16 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 
 from .controllers import router
-from .core.database import init_db
+from .core.database import SessionLocal, init_db
+from .models import sk_model
 
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     init_db()
+    if sk_model.enabled():
+        with SessionLocal() as db:
+            sk_model.train(db)  # recupera el modelo a partir de las atenciones guardadas
     yield
 
 

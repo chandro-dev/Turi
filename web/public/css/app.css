@@ -503,3 +503,10 @@ input:focus, select:focus { outline: none; background: #fff; border-color: var(-
 input[type=time] { border: 1.5px solid var(--line); background: #f7fafc; border-radius: 13px; padding: 11px 14px; width: 100%; }
 
 .shift-chip b { display: inline; }
+
+/* ---------- v2.4: administracion y motor de estimacion ---------- */
+.titem.staff.inactive { opacity: .6; }
+.svc-ic { width: 38px; height: 38px; border-radius: 12px; display: grid; place-items: center; color: #fff; background: var(--c); flex: none; }
+.shift-chip em { font-style: normal; color: var(--indigo); font-weight: 700; }
+.weekgrid .slot em { font-style: normal; color: var(--indigo); }
+.engine { display: flex; flex-direction: column; gap: 10px; }

@@ -31,6 +31,7 @@ class SuggestIn(BaseModel):
     bonus_min: float = 0.0        # bonificacion minima de prioridad (minutos de adelanto)
     max_bonus_min: float = 0.0    # tope que el modelo puede otorgar para cumplir la meta
     target_wait_min: float | None = None  # meta de espera para prioritarios
+    hour: int | None = Field(default=None, ge=0, le=23)  # hora local (franja horaria del modelo)
     prior_minutes: dict[str, float]
     points: list[PointIn]
 
@@ -57,6 +58,7 @@ class SuggestOut(BaseModel):
 
 class EstimateIn(BaseModel):
     prior_minutes: dict[str, float]
+    hour: int | None = Field(default=None, ge=0, le=23)
     point: PointIn
 
 
@@ -71,6 +73,7 @@ class LearnIn(BaseModel):
     preferential: bool = False
     minutes: float = Field(gt=0)
     prior_minutes: float | None = None  # valor inicial del servicio: linea base para medir efectividad
+    hour: int | None = Field(default=None, ge=0, le=23)  # hora local en que termino la atencion
 
 
 class ReportIn(BaseModel):
@@ -82,6 +85,7 @@ class PredictIn(BaseModel):
     point_id: int
     preferential: bool = False
     prior_minutes: float
+    hour: int | None = Field(default=None, ge=0, le=23)
 
 
 class Level(BaseModel):

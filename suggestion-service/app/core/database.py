@@ -25,12 +25,24 @@ def get_db():
         yield db
 
 
+def _ensure_columns() -> None:
+    """Migracion minima de columnas nuevas en tablas existentes (solo Postgres; en pruebas la base es nueva)."""
+    if engine.dialect.name != "postgresql":
+        return
+    from sqlalchemy import text
+
+    with engine.begin() as conn:
+        conn.execute(text("ALTER TABLE training_log ADD COLUMN IF NOT EXISTS pred_ema DOUBLE PRECISION"))
+        conn.execute(text("ALTER TABLE training_log ADD COLUMN IF NOT EXISTS pred_sk DOUBLE PRECISION"))
+
+
 def init_db(retries: int = 30) -> None:
     from ..models import entities  # noqa: F401  (registra las tablas)
 
     for i in range(retries):
         try:
             Base.metadata.create_all(engine)
+            _ensure_columns()
             return
         except Exception:
             if i == retries - 1:

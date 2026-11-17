@@ -51,6 +51,33 @@ export function curveChart(curve) {
 
 const maturityBar = (pct) => `<div class="hbar" title="${pct}% de madurez"><i style="width:${pct}%;background:${pct >= 100 ? '#16a34a' : pct >= 50 ? '#0ea5e9' : '#f59e0b'}"></i></div>`;
 
+const MODE_TEXT = { ema: 'Solo EMA', hybrid: 'Hibrido: EMA + scikit-learn', sklearn: 'scikit-learn' };
+
+const engineView = (r) => {
+  const e = r.estimator;
+  const c = r.comparison;
+  const max = Math.max(0.1, c.mae_ema || 0, c.mae_sklearn || 0, c.mae_active || 0);
+  const bar = (label, v, color) => `<div class="r" style="grid-template-columns:150px 1fr 70px"><span>${label}</span>
+    <div class="hbar"><i style="width:${v == null ? 0 : (v / max) * 100}%;background:${color}"></i></div><b>${fmtMin(v, 1)}</b></div>`;
+  return `<section class="card" style="margin-bottom:24px"><div class="card-head"><h2><span class="ic">${ic('cpu')}</span>Motor de estimacion</h2>
+      <button class="btn soft sm" id="retrain" ${e.active ? '' : 'disabled'}>${ic('undo', 'sm')} Reentrenar ahora</button></div>
+    <div class="grid-2 stretch" style="grid-template-columns:1fr 1.2fr">
+      <div class="engine">
+        <div class="rline"><b>Modo:</b> <span class="badge b-ai">${MODE_TEXT[e.mode] || esc(e.mode)}</span></div>
+        <div class="rline"><b>scikit-learn:</b> ${!e.sklearn_installed ? '<span class="badge b-low nodot">No instalado</span>' : e.trained ? '<span class="badge b-IN_SERVICE">Entrenado</span>' : '<span class="badge b-CALLED">Aun sin entrenar</span>'}</div>
+        <div class="rline"><b>Muestras de entrenamiento:</b> ${e.trained_samples}</div>
+        <div class="rline"><b>Peso en la mezcla:</b> ${Math.round(e.weight * 100)}% <span class="muted">(sube con las muestras, maximo 60%)</span></div>
+        <div class="rline"><b>Atenciones guardadas:</b> ${r.attentions_stored}</div>
+        ${e.trained ? '' : `<div class="notice info" style="margin-top:10px">scikit-learn se entrena solo al llegar a ${e.min_train} atenciones (llevas ${r.attentions_stored}) y se reentrena cada ${e.retrain_every}.</div>`}
+      </div>
+      <div>
+        <div class="muted" style="font-weight:700;margin-bottom:8px">Error medio sobre ${c.n} atenciones con scikit-learn activo</div>
+        ${c.n ? `<div class="vs">${bar('Solo EMA', c.mae_ema, '#94a3b8')}${bar('Solo scikit-learn', c.mae_sklearn, '#4f46e5')}${bar('Mezcla (activa)', c.mae_active, '#0d9488')}</div>`
+    : '<div class="muted">Aun no hay atenciones evaluadas con scikit-learn entrenado.</div>'}
+      </div>
+    </div></section>`;
+};
+
 export const reportView = (r) => {
   const v = r.verdict;
   const improv = r.improvement_pct;
@@ -64,6 +91,7 @@ export const reportView = (r) => {
       ${kpi('trend', '#16a34a', 'Mejora', improv == null ? '-' : `${improv > 0 ? '+' : ''}${num(improv, 0)}`, '%', 'frente a no aprender')}
       ${kpi('check', '#0ea5e9', 'Aciertos ±3 min', num(r.within_3min_pct, 0), '%', 'prediccion cercana')}
     </div>
+    ${engineView(r)}
     <div class="grid-2 stretch" style="grid-template-columns:1.6fr 1fr;margin-bottom:24px">
       <section class="card"><div class="card-head"><h2><span class="ic">${ic('trend')}</span>Curva de aprendizaje</h2></div>
         ${curveChart(r.curve)}

@@ -98,7 +98,8 @@ def doctor_panel(d: dict) -> dict:
 # ------------------------------------------------------------ administracion de recursos
 def shift(s) -> dict:
     return {"id": s.id, "user_id": s.user_id, "user_name": s.user.name, "point_id": s.point_id, "point_name": s.point.name,
-            "weekdays": s.days, "start": s.start_time.strftime("%H:%M"), "end": s.end_time.strftime("%H:%M")}
+            "weekdays": s.days, "start": s.start_time.strftime("%H:%M"), "end": s.end_time.strftime("%H:%M"),
+            "overnight": s.end_time <= s.start_time}
 
 
 def admin_point(d: dict) -> dict:
@@ -112,13 +113,17 @@ def admin_point(d: dict) -> dict:
     }
 
 
-def admin_staff(d: dict) -> dict:
+def admin_user(d: dict) -> dict:
     u = d["user"]
     cp = d["current_point"]
     return {
-        "id": u.id, "name": u.name, "username": u.username,
+        "id": u.id, "name": u.name, "username": u.username, "role": u.role, "active": u.active,
         "fixed_point": u.point.name if u.point else None,
         "current_point": cp.name if cp else None,
         "shifts": [shift(s) for s in d["shifts"]],
         "next_shift": d["next_shift"],
     }
+
+
+def admin_service(s) -> dict:
+    return {"id": s.id, "code": s.code, "name": s.name, "prior_minutes": s.prior_minutes, "color": s.color}

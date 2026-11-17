@@ -1,4 +1,5 @@
 import time
+from pathlib import Path
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
@@ -14,20 +15,16 @@ def get_db():
         yield db
 
 
-def _ensure_columns() -> None:
-    """Migracion minima: agrega columnas nuevas a tablas ya existentes (Postgres)."""
-    from sqlalchemy import text
+def run_migrations(retries: int = 30) -> None:
+    """Aplica las migraciones de Alembic (upgrade head). Reintenta mientras la base arranca."""
+    from alembic import command
+    from alembic.config import Config
 
-    with engine.begin() as conn:
-        conn.execute(text("ALTER TABLE turns ADD COLUMN IF NOT EXISTS bonus_min DOUBLE PRECISION"))
-        conn.execute(text("ALTER TABLE points ADD COLUMN IF NOT EXISTS enabled BOOLEAN NOT NULL DEFAULT TRUE"))
-
-
-def init_db(base, retries: int = 30) -> None:
+    cfg = Config()
+    cfg.set_main_option("script_location", str(Path(__file__).resolve().parent.parent / "migrations"))
     for i in range(retries):
         try:
-            base.metadata.create_all(engine)
-            _ensure_columns()
+            command.upgrade(cfg, "head")
             return
         except Exception:
             if i == retries - 1:

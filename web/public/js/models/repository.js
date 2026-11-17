@@ -5,6 +5,7 @@ const post = (path, body) => api(path, { method: 'POST', body });
 
 export const repo = {
   // sesion
+  config: () => api('/config'),
   login: (username, password) => post('/auth/login', { username, password }),
   me: () => api('/auth/me'),
   // catalogos
@@ -26,14 +27,18 @@ export const repo = {
   simulate: (count) => post('/demo/simulate', { count }),
   modelReport: () => api('/model/report'),
   modelPredict: (body) => post('/model/predict', body),
+  modelRetrain: () => post('/model/retrain'),
   // recursos (supervisor)
   adminOverview: () => api('/admin/overview'),
   createPoint: (b) => post('/admin/points', b),
   patchPoint: (id, b) => api(`/admin/points/${id}`, { method: 'PATCH', body: b }),
   deletePoint: (id) => api(`/admin/points/${id}`, { method: 'DELETE' }),
-  createStaff: (b) => post('/admin/staff', b),
-  patchStaff: (id, b) => api(`/admin/staff/${id}`, { method: 'PATCH', body: b }),
-  deleteStaff: (id) => api(`/admin/staff/${id}`, { method: 'DELETE' }),
+  createUser: (b) => post('/admin/users', b),
+  patchUser: (id, b) => api(`/admin/users/${id}`, { method: 'PATCH', body: b }),
+  deleteUser: (id) => api(`/admin/users/${id}`, { method: 'DELETE' }),
+  createService: (b) => post('/admin/services', b),
+  patchService: (id, b) => api(`/admin/services/${id}`, { method: 'PATCH', body: b }),
+  deleteService: (id) => api(`/admin/services/${id}`, { method: 'DELETE' }),
   createShift: (b) => post('/admin/shifts', b),
   deleteShift: (id) => api(`/admin/shifts/${id}`, { method: 'DELETE' }),
   // publico

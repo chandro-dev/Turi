@@ -53,7 +53,7 @@ def predict(db: Session, service_code: str, preferential: bool, point_id: int | 
         if point_id is not None and p.id != point_id:
             continue
         pr = _call("/predict", {"service": service_code, "point_id": p.id, "preferential": preferential,
-                                "prior_minutes": priors.get(service_code, 10.0)})
+                                "prior_minutes": priors.get(service_code, 10.0), "hour": availability.local_now().hour})
         o = by_point.get(p.id)
         rows.append({
             "point_id": p.id, "name": p.name, "active": availability.is_available(p, shifts),
@@ -85,3 +85,8 @@ def predict(db: Session, service_code: str, preferential: bool, point_id: int | 
             answer += f" Aun asi no se alcanza la meta de {fmt_min(suggest_client.policy()['target_wait_min'])}."
     return {"service": {"code": service.code, "name": service.name}, "preferential": preferential,
             "answer": answer, "points": rows, "policy": suggest_client.policy(), "model": model}
+
+
+def retrain() -> dict:
+    """Pide al servicio de IA reentrenar scikit-learn con las atenciones guardadas."""
+    return _call("/model/retrain", {})

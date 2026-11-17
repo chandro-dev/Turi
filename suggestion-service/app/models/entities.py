@@ -44,3 +44,18 @@ class TrainingLog(Base):
     abs_error = Column(Float, nullable=False)
     prior_error = Column(Float, nullable=True)
     n_before = Column(Integer, nullable=False, default=0)
+    pred_ema = Column(Float, nullable=True)   # lo que habria predicho solo el EMA
+    pred_sk = Column(Float, nullable=True)    # lo que habria predicho solo scikit-learn (si ya estaba entrenado)
+
+
+class Attention(Base):
+    """Cada atencion finalizada (dato de entrenamiento de scikit-learn)."""
+
+    __tablename__ = "attentions"
+    id = Column(Integer, primary_key=True)
+    ts = Column(DateTime(timezone=True), default=_now, nullable=False)
+    service = Column(String(32), nullable=False, index=True)
+    point_id = Column(String(32), nullable=False)
+    grp = Column(String(16), nullable=False)
+    hour = Column(Integer, nullable=True)
+    minutes = Column(Float, nullable=False)

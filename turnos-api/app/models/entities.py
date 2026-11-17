@@ -73,6 +73,7 @@ class User(Base):
     username: Mapped[str] = mapped_column(String(40), unique=True)
     name: Mapped[str] = mapped_column(String(120))
     role: Mapped[str] = mapped_column(String(20))  # RECEPCION | MEDICO | SUPERVISOR
+    active: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true")
     password_hash: Mapped[str] = mapped_column(String(200))
     point_id: Mapped[int | None] = mapped_column(ForeignKey("points.id"), nullable=True)
     point: Mapped[Point | None] = relationship(lazy="joined")

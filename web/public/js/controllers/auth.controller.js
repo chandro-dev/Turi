@@ -19,8 +19,10 @@ export async function restoreSession() {
   return session.user;
 }
 
-export function loginController() {
-  $('#app').innerHTML = loginView();
+export async function loginController() {
+  let demo = true;
+  try { demo = (await repo.config()).demo; } catch { /* sin conexion: se muestra la version por defecto */ }
+  $('#app').innerHTML = loginView(demo);
   const submit = async (username, password) => {
     $('#go').disabled = true;
     $('#err').textContent = '';
