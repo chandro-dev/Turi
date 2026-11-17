@@ -14,6 +14,7 @@ from .entities import (  # noqa: F401
     Counter,
     Point,
     Service,
+    Shift,
     Turn,
     TurnEvent,
     User,

@@ -68,3 +68,35 @@ class ModelPredictIn(BaseModel):
     service_code: str
     preferential: bool = False
     point_id: int | None = None
+
+
+# ------------------------------------------------------------ administracion de recursos
+class PointCreateIn(BaseModel):
+    name: str = Field(min_length=2, max_length=80)
+    service_codes: list[str] = Field(min_length=1)
+    enabled: bool = True
+
+
+class PointPatchIn(BaseModel):
+    name: str | None = Field(default=None, min_length=2, max_length=80)
+    service_codes: list[str] | None = Field(default=None, min_length=1)
+    enabled: bool | None = None
+
+
+class StaffCreateIn(BaseModel):
+    name: str = Field(min_length=2, max_length=120)
+    username: str = Field(min_length=3, max_length=40)
+    password: str = Field(min_length=6, max_length=100)
+
+
+class StaffPatchIn(BaseModel):
+    name: str | None = Field(default=None, min_length=2, max_length=120)
+    password: str | None = Field(default=None, min_length=6, max_length=100)
+
+
+class ShiftIn(BaseModel):
+    user_id: int
+    point_id: int
+    weekdays: list[int] = Field(min_length=1, max_length=7)
+    start: str = Field(pattern=r"^([01]\d|2[0-3]):[0-5]\d$")
+    end: str = Field(pattern=r"^([01]\d|2[0-3]):[0-5]\d$")

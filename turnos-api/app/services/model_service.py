@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 
 from ..core.config import SUGGEST_URL
 from ..models import NORMAL, PREFERENCIAL, Point, Service
-from . import suggest_client, turn_service
+from . import availability, suggest_client, turn_service
 from .suggest_client import fmt_min
 from .errors import DomainError
 
@@ -46,7 +46,8 @@ def predict(db: Session, service_code: str, preferential: bool, point_id: int | 
     by_point = {o["point_id"]: o for o in options}
 
     rows = []
-    for p in db.execute(select(Point).order_by(Point.id)).scalars().all():
+    shifts = availability.load_shifts(db)
+    for p in db.execute(select(Point).where(Point.enabled.is_(True)).order_by(Point.id)).scalars().all():
         if service_code not in [s.code for s in p.services]:
             continue
         if point_id is not None and p.id != point_id:
@@ -55,7 +56,7 @@ def predict(db: Session, service_code: str, preferential: bool, point_id: int | 
                                 "prior_minutes": priors.get(service_code, 10.0)})
         o = by_point.get(p.id)
         rows.append({
-            "point_id": p.id, "name": p.name, "active": p.active,
+            "point_id": p.id, "name": p.name, "active": availability.is_available(p, shifts),
             "minutes": pr["minutes"], "low": pr["low"], "high": pr["high"], "margin": pr["margin"],
             "samples": pr["samples"], "confidence_pct": pr["confidence_pct"], "levels": pr["levels"],
             "est_wait_min": o["est_wait_min"] if o else None,

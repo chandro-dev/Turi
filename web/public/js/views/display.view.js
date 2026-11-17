@@ -19,8 +19,8 @@ export const callsView = (calls, fresh) => (calls.length
 /** Proximos turnos por punto: el primero se destaca como "Siguiente". */
 export const nextView = (points) => points.map((p) => `
   <div class="npt ${p.active ? '' : 'off'}">
-    <div class="t"><span>${esc(p.name)}</span><small>${p.active ? `${p.waiting} en fila` : 'en pausa'}</small></div>
+    <div class="t"><span>${esc(p.name)}</span><small>${p.active ? `${p.waiting} en fila` : (p.status === 'off_hours' ? 'fuera de horario' : 'en pausa')}</small></div>
     ${p.active && p.upcoming.length
       ? `<div class="chipsrow">${p.upcoming.map((u, i) => `<span class="tchip ${i === 0 ? 'first' : ''}" style="--c:${u.color}">${esc(u.code)}${u.preferential ? '<em>★</em>' : ''}</span>`).join('')}</div>`
-      : `<div class="none">${p.active ? 'Sin turnos en espera' : 'Punto no disponible'}</div>`}
+      : `<div class="none">${p.active ? 'Sin turnos en espera' : (p.status === 'off_hours' ? 'Atiende segun horario' : 'Punto no disponible')}</div>`}
   </div>`).join('');

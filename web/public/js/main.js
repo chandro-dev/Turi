@@ -9,6 +9,7 @@ import { displayController } from './controllers/display.controller.js';
 import { doctorController } from './controllers/doctor.controller.js';
 import { lookupController } from './controllers/lookup.controller.js';
 import { modelController } from './controllers/model.controller.js';
+import { resourcesController } from './controllers/resources.controller.js';
 import { queueController } from './controllers/queue.controller.js';
 import { receptionController } from './controllers/reception.controller.js';
 import { supervisorController } from './controllers/supervisor.controller.js';
@@ -20,6 +21,7 @@ const PRIVATE = {
   '#/supervisor': [['SUPERVISOR'], supervisorController],
   '#/fila': [['SUPERVISOR'], queueController],
   '#/modelo': [['SUPERVISOR'], modelController],
+  '#/recursos': [['SUPERVISOR'], resourcesController],
 };
 
 async function route() {

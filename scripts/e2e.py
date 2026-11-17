@@ -105,7 +105,7 @@ check("prioritario espera menos que un normal", op["est_wait_min"] <= on["est_wa
 s, tp = call("POST", "/turns", {"doc_number": "P" + stamp, "patient_name": "Prioritario Prueba", "age": 72, "service_code": "FAR"}, rec)
 check("turno prioritario guarda el adelanto", s == 201 and tp.get("bonus_min"), str(tp))
 s, lst = call("GET", "/turns", tok=rec)
-far = [x for x in lst if x["service"]["code"] == "FAR" and x["status"] == "WAITING" and x["code"] != tp["code"] and x["patient_name"].startswith("Normal")]
+far = [x for x in lst if x["service"]["code"] == "FAR" and x["status"] == "WAITING" and x["code"] != tp["code"] and x["patient_name"].startswith("Normal") and x["doc_number"].endswith(stamp)]  # solo los de esta ejecucion
 mine = next(x for x in lst if x["code"] == tp["code"])
 check("prioritario queda delante de los normales recien llegados", bool(far) and all(mine["position"] < x["position"] for x in far), str((mine["position"], [x["position"] for x in far])))
 
@@ -117,6 +117,66 @@ check("reporte prohibido a recepcion", call("GET", "/model/report", tok=rec)[0] 
 s, ans = call("POST", "/model/predict", {"service_code": "CG", "preferential": True}, sup)
 check("el modelo responde a una consulta", s == 200 and ans["answer"] and ans["points"] and ans["points"][0]["levels"], str(ans)[:200])
 check("consulta de modelo prohibida a recepcion", call("POST", "/model/predict", {"service_code": "CG"}, rec)[0] == 403)
+
+# --- Recursos: puntos, personal y horarios (supervisor)
+check("admin/overview prohibido a recepcion", call("GET", "/admin/overview", tok=rec)[0] == 403)
+s, ov = call("GET", "/admin/overview", tok=sup)
+check("overview lista puntos, personal y servicios", s == 200 and ov["points"] and ov["services"] and "staff" in ov, str(ov)[:200])
+
+s, pa = call("POST", "/admin/points", {"name": f"E2E Lab {stamp}", "service_codes": ["LAB"]}, sup)
+check("crear punto", s == 201, str(pa))
+s, pb = call("POST", "/admin/points", {"name": f"E2E Fuera {stamp}", "service_codes": ["LAB"]}, sup)
+s, dup = call("POST", "/admin/points", {"name": f"E2E Lab {stamp}", "service_codes": ["LAB"]}, sup)
+check("nombre de punto duplicado rechazado", s == 409, str(dup))
+s, bad = call("POST", "/admin/points", {"name": "Sin servicios", "service_codes": []}, sup)
+check("punto sin servicios rechazado", s == 422, str(bad))
+
+s, st1 = call("POST", "/admin/staff", {"name": "Tec Uno", "username": f"e2e1{stamp}", "password": "clave123"}, sup)
+s, st2 = call("POST", "/admin/staff", {"name": "Tec Dos", "username": f"e2e2{stamp}", "password": "clave123"}, sup)
+check("crear personal", "id" in st1 and "id" in st2, str((st1, st2)))
+check("usuario repetido rechazado", call("POST", "/admin/staff", {"name": "Otro", "username": f"e2e1{stamp}", "password": "clave123"}, sup)[0] == 409)
+check("clave corta rechazada", call("POST", "/admin/staff", {"name": "Otro", "username": f"e2e9{stamp}", "password": "123"}, sup)[0] == 422)
+
+ALL = [0, 1, 2, 3, 4, 5, 6]
+s, sh1 = call("POST", "/admin/shifts", {"user_id": st1["id"], "point_id": pa["id"], "weekdays": ALL, "start": "00:00", "end": "23:59"}, sup)
+check("asignar horario que cubre ahora", s == 201, str(sh1))
+check("horario con fin <= inicio rechazado", call("POST", "/admin/shifts", {"user_id": st2["id"], "point_id": pb["id"], "weekdays": ALL, "start": "10:00", "end": "09:00"}, sup)[0] == 422)
+check("cruce de horario del mismo funcionario rechazado", call("POST", "/admin/shifts", {"user_id": st1["id"], "point_id": pb["id"], "weekdays": [1], "start": "08:00", "end": "09:00"}, sup)[0] == 409)
+check("cruce de horario en el mismo punto rechazado", call("POST", "/admin/shifts", {"user_id": st2["id"], "point_id": pa["id"], "weekdays": [1], "start": "08:00", "end": "09:00"}, sup)[0] == 409)
+s, sh2 = call("POST", "/admin/shifts", {"user_id": st2["id"], "point_id": pb["id"], "weekdays": ALL, "start": "00:00", "end": "00:01"}, sup)
+check("asignar horario fuera de la hora actual", s == 201, str(sh2))
+
+s, pts = call("GET", "/points", tok=rec)
+state = {p["name"]: p["status"] for p in pts}
+check("punto con horario vigente esta disponible", state.get(f"E2E Lab {stamp}") == "open", str(state))
+check("punto fuera de horario no esta disponible", state.get(f"E2E Fuera {stamp}") == "off_hours", str(state))
+s, pv = call("POST", "/turns/suggest", {"service_code": "LAB", "age": 30}, rec)
+names = [o["name"] for o in pv["options"]]
+check("sugerencia incluye punto en horario y excluye fuera de horario", f"E2E Lab {stamp}" in names and f"E2E Fuera {stamp}" not in names, str(names))
+s, r = call("POST", "/turns", {"doc_number": "Z" + stamp, "patient_name": "Prueba Horario", "age": 30, "service_code": "LAB", "point_id": pb["id"]}, rec)
+check("no se asigna a un punto fuera de horario", s == 409, str(r))
+
+tec1 = login(f"e2e1{stamp}", "clave123")
+s, panel = call("GET", "/doctor/panel", tok=tec1)
+check("funcionario en turno ve su punto", s == 200 and panel["off_shift"] is False and panel["point"]["name"] == f"E2E Lab {stamp}", str(panel)[:200])
+tec2 = login(f"e2e2{stamp}", "clave123")
+s, panel2 = call("GET", "/doctor/panel", tok=tec2)
+check("funcionario fuera de turno ve su proximo turno", s == 200 and panel2["off_shift"] is True and panel2["next_shift"], str(panel2))
+check("funcionario fuera de turno no puede llamar", call("POST", "/doctor/call-next", tok=tec2)[0] == 403)
+
+s, st_list = call("GET", "/admin/overview", tok=sup)
+mine = next(x for x in st_list["staff"] if x["id"] == st1["id"])
+check("overview muestra el punto actual del funcionario", mine["current_point"] == f"E2E Lab {stamp}" and mine["shifts"], str(mine))
+
+check("cerrar punto", call("PATCH", f"/admin/points/{pa['id']}", {"enabled": False}, sup)[0] == 200)
+s, pts = call("GET", "/points", tok=rec)
+check("punto cerrado no aparece en recepcion", f"E2E Lab {stamp}" not in [p["name"] for p in pts])
+check("reabrir punto", call("PATCH", f"/admin/points/{pa['id']}", {"enabled": True}, sup)[0] == 200)
+
+# limpieza
+check("quitar horario", call("DELETE", f"/admin/shifts/{sh2['id']}", tok=sup)[0] == 204)
+check("eliminar personal", call("DELETE", f"/admin/staff/{st1['id']}", tok=sup)[0] == 204 and call("DELETE", f"/admin/staff/{st2['id']}", tok=sup)[0] == 204)
+check("eliminar puntos de prueba", call("DELETE", f"/admin/points/{pa['id']}", tok=sup)[0] == 204 and call("DELETE", f"/admin/points/{pb['id']}", tok=sup)[0] == 204)
 
 print("\n" + ("TODO OK" if not FAILS else f"{len(FAILS)} FALLAS: {FAILS}"))
 sys.exit(1 if FAILS else 0)

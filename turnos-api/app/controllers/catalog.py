@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 from ..core.database import get_db
 from ..core.security import current_user
 from ..models import ACTIVE_STATUSES, CALLED, IN_SERVICE, WAITING, Point, Service, Turn, User
-from ..services import queueing
+from ..services import availability, queueing
 from ..views import presenters
 
 router = APIRouter(prefix="/api", tags=["catalogo"])
@@ -29,7 +29,9 @@ def list_points(db: Session = Depends(get_db), _: User = Depends(current_user)):
     ).scalars().all()
     waiting = Cnt(t.point_id for t in active if t.status == WAITING)
     busy = {t.point_id for t in active if t.status in (CALLED, IN_SERVICE)}
+    shifts = availability.load_shifts(db)
     return [
-        presenters.point_row(p, waiting.get(p.id, 0), p.id in busy)
+        presenters.point_row(p, waiting.get(p.id, 0), p.id in busy, availability.point_status(p, shifts))
         for p in db.execute(select(Point).order_by(Point.id)).scalars().all()
+        if p.enabled
     ]

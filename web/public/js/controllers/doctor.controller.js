@@ -2,7 +2,7 @@
 import { $, $$, guard, toast } from '../core/dom.js';
 import { poll } from '../core/timers.js';
 import { repo } from '../models/repository.js';
-import { doctorView } from '../views/doctor.view.js';
+import { doctorView, offShiftView } from '../views/doctor.view.js';
 import { mountShell } from './shell.js';
 
 export function doctorController() {
@@ -16,6 +16,7 @@ export function doctorController() {
   });
 
   function render(d) {
+    if (d.off_shift) { $('#doc').innerHTML = offShiftView(d); return; }
     $('#doc').innerHTML = doctorView(d);
     $$('[data-p]').forEach((b) => { b.onclick = act(b.dataset.p); });
     $('#act').onchange = guard(async (e) => {

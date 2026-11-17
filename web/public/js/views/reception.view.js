@@ -2,6 +2,7 @@
 import { esc } from '../core/dom.js';
 import { fmtMin, greeting, minParts, mins, timeOf } from '../core/format.js';
 import { ic, initials, SERVICE_ICON } from '../core/icons.js';
+import { POINT_STATUS } from '../models/constants.js';
 import { MAX_AGE } from '../models/rules.js';
 import { emptyState, prioBadge, statusBadge } from './components.js';
 import { headView } from './layout.js';
@@ -113,7 +114,7 @@ export const reassignModalView = (t, points) => {
     <p class="muted" style="margin-bottom:14px">${requeue ? 'El paciente vuelve a la fila con prioridad baja.' : 'Elige el nuevo punto de atencion.'}</p>
     <div class="options">${points.map((p) => `<div class="opt ${p.id === t.point.id ? 'on' : ''}" data-p="${p.id}">
       <div class="nm"><b>${esc(p.name)}</b></div><div class="eta"><b>${p.waiting}</b><small>en fila</small></div>
-      <div class="meta">${p.active ? 'Disponible' : 'En pausa'}</div></div>`).join('')}</div>
+      <div class="meta">${POINT_STATUS[p.status] || (p.active ? 'Disponible' : 'En pausa')}</div></div>`).join('')}</div>
     <div class="foot"><button class="btn ghost" id="cx">Cancelar</button></div>`;
 };
 

@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 
 from ..core.config import TZ
 from ..models import CALLED, CANCELLED, DONE, IN_SERVICE, NO_SHOW, PREFERENCIAL, WAITING, Point, Service, Turn
-from . import queueing, suggest_client, turn_service
+from . import availability, queueing, suggest_client, turn_service
 from .errors import NotFound
 
 UPCOMING_PER_POINT = 4  # turnos proximos que muestra la pantalla de espera
@@ -26,6 +26,7 @@ def _avg(xs):
 def stats(db: Session) -> dict:
     turns = turn_service.list_turns(db, include_closed=True)
     points = db.execute(select(Point).order_by(Point.id)).scalars().all()
+    shifts = availability.load_shifts(db)
     waits = [_mins(t.created_at, t.called_at) for t in turns if t.called_at]
     durs = [_mins(t.started_at, t.finished_at) for t in turns if t.status == DONE and t.started_at and t.finished_at]
     hourly = Cnt(t.created_at.astimezone(TZ).hour for t in turns)
@@ -35,7 +36,8 @@ def stats(db: Session) -> dict:
         pt = [t for t in turns if t.point_id == p.id]
         pd = [_mins(t.started_at, t.finished_at) for t in pt if t.status == DONE and t.started_at and t.finished_at]
         per_point.append({
-            "id": p.id, "name": p.name, "active": p.active,
+            "id": p.id, "name": p.name, "status": availability.point_status(p, shifts),
+            "active": availability.is_available(p, shifts),
             "waiting": sum(t.status == WAITING for t in pt),
             "in_attention": sum(t.status in (CALLED, IN_SERVICE) for t in pt),
             "done": sum(t.status == DONE for t in pt),
@@ -75,12 +77,14 @@ def display(db: Session) -> dict:
     calling = db.execute(
         select(Turn).where(Turn.day == day, Turn.status.in_([CALLED, IN_SERVICE])).order_by(Turn.called_at.desc())
     ).scalars().all()
-    points = db.execute(select(Point).order_by(Point.id)).scalars().all()
+    points = db.execute(select(Point).where(Point.enabled.is_(True)).order_by(Point.id)).scalars().all()
+    shifts = availability.load_shifts(db)
     rows = []
     for p in points:
         queue = queueing.waiting_turns(db, p.id)
         rows.append({
             "point": p,
+            "status": availability.point_status(p, shifts),
             "waiting": len(queue),
             "upcoming": queue[:UPCOMING_PER_POINT],
         })

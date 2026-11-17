@@ -26,7 +26,9 @@ export const statsView = (s) => {
 
   const points = s.per_point.map((p) => {
     const pct = Math.min(100, (p.waiting / 6) * 100);
-    const state = !p.active ? '<span class="badge b-low">En pausa</span>'
+    const state = p.status === 'closed' ? '<span class="badge b-CANCELLED">Cerrado</span>'
+      : p.status === 'off_hours' ? '<span class="badge b-low">Fuera de horario</span>'
+      : !p.active ? '<span class="badge b-low">En pausa</span>'
       : p.in_attention ? '<span class="badge b-IN_SERVICE">Atendiendo</span>' : '<span class="badge b-WAITING">Libre</span>';
     return `<div class="pcard"><div class="top"><b>${esc(p.name)}</b>${state}</div>
       <div class="num">${p.waiting}</div><small>en espera</small>

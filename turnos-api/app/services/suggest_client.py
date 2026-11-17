@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 
 from ..core.config import PRIORITY_BASE_BONUS_MIN, PRIORITY_MAX_BONUS_MIN, PRIORITY_TARGET_WAIT_MIN, SUGGEST_URL
 from ..models import NORMAL, PREFERENCIAL, Point, Service, Turn
-from . import queueing
+from . import availability, queueing
 
 log = logging.getLogger("turi")
 TIMEOUT = 3.0
@@ -30,7 +30,8 @@ def priors(db: Session) -> dict[str, float]:
     return {s.code: s.prior_minutes for s in db.execute(select(Service)).scalars().all()}
 
 
-def point_payload(db: Session, p: Point, queue: list[Turn] | None = None) -> dict:
+def point_payload(db: Session, p: Point, queue: list[Turn] | None = None, shifts: list | None = None) -> dict:
+    shifts = availability.load_shifts(db) if shifts is None else shifts
     queue = queueing.waiting_turns(db, p.id) if queue is None else queue
     cur = queueing.current_turn(db, p.id)
     in_service = None
@@ -45,7 +46,7 @@ def point_payload(db: Session, p: Point, queue: list[Turn] | None = None) -> dic
         "id": p.id,
         "name": p.name,
         "services": [s.code for s in p.services],
-        "active": p.active,
+        "active": availability.is_available(p, shifts),
         "queue": [
             {"id": t.id, "service": t.service.code, "preferential": t.priority_class == PREFERENCIAL, "key": queueing.turn_key(t)}
             for t in queue
@@ -76,7 +77,8 @@ def _fallback_suggest(service_code: str, key: float, points: list[dict], prior: 
 
 
 def suggest_points(db: Session, service: Service, priority_class: str) -> tuple[list[dict], str]:
-    points = [point_payload(db, p) for p in db.execute(select(Point)).scalars().all()]
+    shifts = availability.load_shifts(db)
+    points = [point_payload(db, p, shifts=shifts) for p in db.execute(select(Point)).scalars().all()]
     prior = priors(db)
     pref = priority_class == PREFERENCIAL
     base_key = queueing.key_for(NORMAL, queueing.now())  # clave sin bonificacion

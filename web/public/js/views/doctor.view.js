@@ -25,7 +25,7 @@ const stageView = (d) => {
   }
   const first = d.queue[0];
   return `<div class="hero ${d.point.active ? 'idle' : 'paused'}">
-    <div class="eyebrow">${d.point.active ? 'LISTO PARA ATENDER' : 'PUNTO EN PAUSA'}</div>
+    <div class="eyebrow">${d.point.status === 'closed' ? 'PUNTO CERRADO POR SUPERVISION' : d.point.active ? 'LISTO PARA ATENDER' : 'PUNTO EN PAUSA'}</div>
     <div class="count" style="margin:16px 0 4px">${d.queue.length}</div>
     <div class="pname">${d.queue.length === 1 ? 'paciente en espera' : 'pacientes en espera'}</div>
     ${first ? `<div class="psub">Siguiente: <b>${esc(first.code)}</b> · ${esc(first.patient_name)} ${first.priority_class === 'PREFERENCIAL' ? '★' : ''}</div>` : '<div class="psub">Nadie esperando por ahora</div>'}
@@ -39,6 +39,12 @@ const upcomingView = (d) => (d.queue.length
       <div class="who"><b>${esc(t.patient_name)}</b><span>${esc(t.service.name)}</span>${t.priority_class === 'PREFERENCIAL' ? `<div class="tags">${prioBadge(t)}</div>` : ''}</div>
       <div class="pos"><b>#${t.position}</b><small>${t.eta_min < 1 ? 'siguiente' : '~' + mins(t.eta_min)}</small></div></div>`).join('')}</div>`
   : emptyState('coffee', 'Fila vacia', 'Buen momento para un cafe.'));
+
+export const offShiftView = (d) => `
+  ${headView('Fuera de turno', 'No tienes un punto de atencion asignado en este horario.')}
+  <section class="card"><div class="empty"><div class="ico">${ic('clock')}</div>
+    ${d.next_shift ? `<b>Tu proximo turno</b><br>${esc(d.next_shift.weekday)} ${d.next_shift.start}–${d.next_shift.end} · ${esc(d.next_shift.point)}`
+      : '<b>Sin horarios asignados</b><br>Pide a supervision que te asigne un punto y un horario.'}</div></section>`;
 
 export const doctorView = (d) => `
   ${headView(esc(d.point.name), esc(d.point.services.join(', ')),

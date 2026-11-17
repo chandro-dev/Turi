@@ -9,3 +9,5 @@ export const STATUS_COLOR = {
 export const ACTIVE_STATUSES = ['WAITING', 'CALLED', 'IN_SERVICE', 'NO_SHOW'];
 export const ROLE = { RECEPCION: 'Recepcion', MEDICO: 'Atencion', SUPERVISOR: 'Supervision' };
 export const HOME = { RECEPCION: '#/recepcion', MEDICO: '#/medico', SUPERVISOR: '#/supervisor' };
+
+export const POINT_STATUS = { open: 'Disponible', paused: 'En pausa', off_hours: 'Fuera de horario', closed: 'Cerrado' };

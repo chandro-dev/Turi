@@ -112,7 +112,7 @@ export function receptionController() {
 
   // ---------------------------------------------------------- acciones sobre la fila
   const reassign = (t) => {
-    const options = st.points.filter((p) => p.services.includes(t.service.code));
+    const options = st.points.filter((p) => p.services.includes(t.service.code) && !['closed', 'off_hours'].includes(p.status));
     const requeue = t.status === 'NO_SHOW';
     modal(reassignModalView(t, options), (root, close) => {
       $('#cx', root).onclick = close;

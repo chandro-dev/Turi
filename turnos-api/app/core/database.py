@@ -20,6 +20,7 @@ def _ensure_columns() -> None:
 
     with engine.begin() as conn:
         conn.execute(text("ALTER TABLE turns ADD COLUMN IF NOT EXISTS bonus_min DOUBLE PRECISION"))
+        conn.execute(text("ALTER TABLE points ADD COLUMN IF NOT EXISTS enabled BOOLEAN NOT NULL DEFAULT TRUE"))
 
 
 def init_db(base, retries: int = 30) -> None:

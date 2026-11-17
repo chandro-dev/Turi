@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import date, datetime, timezone
+from datetime import date, datetime, time, timezone
 
 from sqlalchemy import (
     Boolean,
@@ -14,6 +14,7 @@ from sqlalchemy import (
     String,
     Table,
     Text,
+    Time,
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
@@ -61,7 +62,8 @@ class Point(Base):
     __tablename__ = "points"
     id: Mapped[int] = mapped_column(primary_key=True)
     name: Mapped[str] = mapped_column(String(80), unique=True)
-    active: Mapped[bool] = mapped_column(Boolean, default=True)
+    active: Mapped[bool] = mapped_column(Boolean, default=True)    # pausa: la controla el personal del punto
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true")  # abierto/cerrado: lo controla el supervisor
     services: Mapped[list[Service]] = relationship(secondary=point_services, lazy="selectin")
 
 
@@ -130,3 +132,23 @@ class TurnEvent(Base):
     type: Mapped[str] = mapped_column(String(24))
     detail: Mapped[str] = mapped_column(Text, default="")
     username: Mapped[str | None] = mapped_column(String(40), nullable=True)
+
+
+class Shift(Base):
+    """Turno de trabajo: un funcionario atiende un punto ciertos dias de la semana en un rango horario."""
+
+    __tablename__ = "shifts"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    point_id: Mapped[int] = mapped_column(ForeignKey("points.id", ondelete="CASCADE"), index=True)
+    weekdays: Mapped[str] = mapped_column(String(20))  # "0,1,2,3,4" (0 = lunes)
+    start_time: Mapped[time] = mapped_column(Time)
+    end_time: Mapped[time] = mapped_column(Time)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+    user: Mapped[User] = relationship(lazy="joined")
+    point: Mapped[Point] = relationship(lazy="joined")
+
+    @property
+    def days(self) -> list[int]:
+        return [int(d) for d in self.weekdays.split(",") if d != ""]

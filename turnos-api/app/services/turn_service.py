@@ -19,7 +19,7 @@ from ..models import (
     Turn,
     User,
 )
-from . import priority, queueing, suggest_client
+from . import availability, priority, queueing, suggest_client
 from .errors import Conflict, DomainError, NotFound
 
 
@@ -43,6 +43,16 @@ def list_turns(db: Session, include_closed: bool = False) -> list[Turn]:
     if not include_closed:
         q = q.where(Turn.status.in_(ACTIVE_STATUSES))
     return list(db.execute(q.order_by(Turn.created_at)).scalars().all())
+
+
+STATUS_TEXT = {"closed": "esta cerrado", "off_hours": "esta fuera de su horario de atencion"}
+
+
+def _require_receiving(db: Session, point: Point) -> None:
+    """Un punto cerrado o fuera de horario no recibe pacientes (en pausa si, para no perder turnos ya asignados)."""
+    st = availability.point_status(point, availability.load_shifts(db))
+    if st in STATUS_TEXT:
+        raise Conflict(f"{point.name} {STATUS_TEXT[st]}")
 
 
 # ------------------------------------------------------------------ recepcion
@@ -80,6 +90,7 @@ def create_turn(db: Session, data: dict, username: str) -> tuple[Turn, str]:
     point = db.get(Point, point_id)
     if not point or service.code not in [s.code for s in point.services]:
         raise DomainError("El punto no atiende este servicio", 400)
+    _require_receiving(db, point)
     chosen = next((o for o in options if o["point_id"] == point_id), None)
 
     code, day = queueing.next_code(db, service)
@@ -140,6 +151,7 @@ def reassign_turn(db: Session, turn_id: int, point_id: int, username: str) -> Tu
     p = db.get(Point, point_id)
     if not p or t.service.code not in [s.code for s in p.services]:
         raise DomainError("El punto no atiende este servicio", 400)
+    _require_receiving(db, p)
     detail = f"{t.point.name} -> {p.name}"
     if t.status == NO_SHOW:  # reincorporacion: vuelve a la fila con prioridad baja
         t.status = WAITING
@@ -158,15 +170,17 @@ def reassign_turn(db: Session, turn_id: int, point_id: int, username: str) -> Tu
 
 
 # ------------------------------------------------------------------ atencion
-def _point_of(user: User) -> Point:
-    if not user.point:
-        raise DomainError("Tu usuario no tiene punto de atencion asignado", 400)
-    return user.point
+def _point_of(db: Session, user: User) -> Point:
+    """Punto que el funcionario atiende ahora (segun su turno de trabajo o su asignacion fija)."""
+    p = availability.user_point(db, user)
+    if not p:
+        raise DomainError("Fuera de turno: no tienes un punto de atencion asignado en este horario", 403)
+    return p
 
 
 def _own_turn(db: Session, user: User, turn_id: int, *statuses: str) -> Turn:
     t = get_turn(db, turn_id)
-    if t.point_id != _point_of(user).id:
+    if t.point_id != _point_of(db, user).id:
         raise DomainError("El turno pertenece a otro punto de atencion", 403)
     if t.status not in statuses:
         raise Conflict(f"Accion no valida: el turno esta en estado {t.status}")
@@ -174,13 +188,18 @@ def _own_turn(db: Session, user: User, turn_id: int, *statuses: str) -> Turn:
 
 
 def doctor_panel(db: Session, user: User) -> dict:
-    p = _point_of(user)
+    shifts = availability.load_shifts(db)
+    p = availability.user_point(db, user, shifts)
+    if p is None:
+        return {"off_shift": True, "next_shift": availability.next_shift(user, shifts)}
     db.refresh(p)
     day = queueing.today()
     by_status = lambda s: list(db.execute(  # noqa: E731
         select(Turn).where(Turn.point_id == p.id, Turn.day == day, Turn.status == s)).scalars().all())
     return {
+        "off_shift": False,
         "point": p,
+        "status": availability.point_status(p, shifts),
         "current": queueing.current_turn(db, p.id),
         "queue": queueing.waiting_turns(db, p.id),
         "estimates": suggest_client.estimate_point(db, p),
@@ -190,14 +209,16 @@ def doctor_panel(db: Session, user: User) -> dict:
 
 
 def set_point_active(db: Session, user: User, active: bool) -> bool:
-    p = db.get(Point, _point_of(user).id)
+    p = db.get(Point, _point_of(db, user).id)
     p.active = active
     db.commit()
     return p.active
 
 
 def call_next(db: Session, user: User) -> Turn:
-    p = _point_of(user)
+    p = _point_of(db, user)
+    if not p.enabled:
+        raise Conflict("El punto esta cerrado por la supervision")
     if queueing.current_turn(db, p.id):
         raise Conflict("Ya hay un paciente llamado o en atencion. Finaliza ese turno primero")
     queue = queueing.waiting_turns(db, p.id)
